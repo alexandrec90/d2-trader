@@ -9,11 +9,12 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from d2_trader.models import Base
+
 config = context.config
 
-# The models' `MetaData`, once there are models: `alembic revision --autogenerate`
-# compares it with the database to write a revision.
-target_metadata = None
+# `alembic revision --autogenerate` compares this with the database to write a revision.
+target_metadata = Base.metadata
 
 
 def database_url() -> str:

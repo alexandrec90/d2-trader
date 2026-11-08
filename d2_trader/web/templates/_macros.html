@@ -1,0 +1,46 @@
+{% macro season_banner(state, now, phase_labels) %}
+<section class="season phase-{{ state.phase.value }}">
+  <div>
+    <span class="phase-label">{{ phase_labels[state.phase] }}</span>
+    <h1>
+      {% if state.season %}Ladder Season {{ state.season.number }}{% else %}No season on record{% endif %}
+    </h1>
+  </div>
+  <dl>
+    {% if state.phase.value == "offseason" %}
+      <div><dt>Ended</dt><dd>{{ humanize(state.ends_at, now) }}</dd></div>
+    {% elif state.ends_at %}
+      <div>
+        <dt>{% if state.end_is_estimate %}Ends (estimate){% else %}Ends{% endif %}</dt>
+        <dd>{{ humanize(state.ends_at, now) }}</dd>
+        <dd class="sub"><time datetime="{{ state.ends_at.isoformat() }}">{{ state.ends_at.strftime("%b %d, %H:%M") }} UTC</time></dd>
+      </div>
+    {% endif %}
+    {% if state.next_season %}
+      <div>
+        <dt>Season {{ state.next_season.number }} starts</dt>
+        <dd>{{ humanize(state.next_season.starts_at, now) }}</dd>
+        <dd class="sub"><time datetime="{{ state.next_season.starts_at.isoformat() }}">{{ state.next_season.starts_at.strftime("%b %d, %H:%M") }} UTC</time></dd>
+      </div>
+    {% endif %}
+  </dl>
+</section>
+{% endmacro %}
+
+{% macro market_fields(key) %}
+<label>Platform
+  <select name="platform">{% for p in platforms %}<option {{ "selected" if p == key.platform }}>{{ p }}</option>{% endfor %}</select>
+</label>
+<label>Mode
+  <select name="mode">{% for m in modes %}<option value="{{ m }}" {{ "selected" if m == key.mode }}>{{ m.title() }}</option>{% endfor %}</select>
+</label>
+<label>Ladder
+  <select name="ladder"><option value="yes">Ladder</option><option value="no">Non-Ladder</option></select>
+</label>
+<label>Version
+  <select name="game_version">{% for k, label in game_versions.items() %}<option value="{{ k }}" {{ "selected" if k == key.game_version }}>{{ label }}</option>{% endfor %}</select>
+</label>
+<label>Ethereal
+  <select name="ethereal"><option value="any">Any</option><option value="no">Not ethereal</option><option value="yes">Ethereal only</option></select>
+</label>
+{% endmacro %}

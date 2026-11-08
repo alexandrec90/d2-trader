@@ -1,6 +1,8 @@
 # D2 Trader
 
-Scrape traderie, d2.io and d2jsp for prices, dashboard, watchlist and notifications
+Tracks D2R item prices per market, with watchlists and threshold alerts, built around
+ladder resets. The README explains the sources and the reset model; read its "Data
+sources" section before touching a collector.
 
 ## Tech Stack
 
@@ -72,9 +74,31 @@ Add this project's specifics *below* — fixtures, isolation rules, markers, wha
 and where — but do not restate the policy above. It is vendored and drift-gated; a copy
 here is a fork that will disagree with it the first time either is edited.
 
+- **Database tests run on real Postgres**, because `listings` depends on `ON CONFLICT`
+  and `NULLS NOT DISTINCT`. `conftest.py` applies migrations once per run, and each test
+  runs inside a rolled-back transaction. Start one with `docker compose up -d db`.
+- **Mock sites with `httpx.MockTransport`**, passed to the collector as `transport`.
+- **The `local` marker reaches live sites** and is deselected by `addopts`; only
+  `scripts/e2e.py` selects it, nightly, to catch a site changing its markup.
+- **No test or tier may reach Traderie or d2jsp.** The collector reaches Traderie because
+  the operator chose that; an unattended test tier is not the collector. Traderie's tests
+  use saved response shapes.
+- Windows needs the selector event loop for async psycopg. `conftest.py` sets it for
+  tests and `run_async` in `__main__.py` sets it for the CLI.
+
 ## Guardrails
 
 Baseline guardrails — including the instruction-file feedback loop (**never silently
 work around a bad instruction**) — are in `.claude/rules/engineering.md`. Rules for
 writing skills and rules themselves are in `.claude/rules/authoring.md`. Cross-reference
 this project's own scoped rules here, one line each.
+
+- **Every outbound request goes through `d2_trader/sources/http.py`.** Its random pacing
+  spreads load. Never add a browser user agent, a proxy, a retry on a refusal or a
+  challenge solver. A refusal is an answer.
+- **`traderie_enabled` defaults to false in code**; the operator turns it on in `.env`, and
+  did, for personal use (README, "Data sources"). d2jsp is never fetched: its rules forbid
+  automation and it sits behind a bot challenge. Neither is a limit to work around.
+- **A ladder price never crosses a season boundary.** Any new read of `listings` goes
+  through `market_view` or states why it does not (`history` does, because the chart
+  draws the boundaries).

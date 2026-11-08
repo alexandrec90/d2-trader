@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}D2 Trader{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">D2 Trader</a>
+    <nav>
+      <a href="/">Watchlists</a>
+      <a href="/seasons">Seasons</a>
+      <a href="/import">Import</a>
+      <a href="/rates">Rates</a>
+      <a href="/sources">Sources</a>
+      <a href="/notifications">Inbox <span class="badge" id="unread" {% if not unread %}hidden{% endif %}>{{ unread }}</span></a>
+    </nav>
+    <span class="live" id="live-status" aria-live="polite"></span>
+  </header>
+  <main>
+    {% if error %}<p class="flash error" role="alert">{{ error }}</p>{% endif %}
+    {% if message %}<p class="flash" role="status">{{ message }}</p>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    Prices are community listings, not guarantees. Data courtesy of
+    <a href="https://diablo2.io" rel="noreferrer">diablo2.io</a>. Season dates from Blizzard news.
+  </footer>
+</body>
+</html>

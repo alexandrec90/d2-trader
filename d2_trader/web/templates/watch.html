@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ watch.item.name }} · D2 Trader{% endblock %}
+{% block content %}
+{% set s = view.summary %}
+<section class="card-head page-head">
+  <div>
+    <h1>{{ watch.item.name }}{% if watch.ethereal %} <span class="tag">eth</span>{% elif watch.ethereal is false %} <span class="tag">non-eth</span>{% endif %}</h1>
+    <p class="muted">{{ market.label }}</p>
+  </div>
+  <form method="post" action="/watch/{{ watch.id }}/delete"><button class="quiet">Stop watching</button></form>
+</section>
+
+{% if view.note %}<p class="note">{{ view.note }}</p>{% endif %}
+
+<section class="tiles">
+  <div class="tile">
+    <span class="tile-label">Estimated price</span>
+    {% set est = s.estimate %}
+    <strong>{% if est %}{{ format_like(est.value, est.high, rates) }}{% else %}–{% endif %}</strong>
+    <span class="muted">{% if est %}95%: {{ format_range(est.low, est.high, rates) }}{% else %}Not enough data{% endif %}</span>
+    {% if s.fair %}<span class="muted">Recent sales: {{ format_range(s.fair.low, s.fair.high, rates) }}</span>{% endif %}
+  </div>
+  <div class="tile">
+    <span class="tile-label">Lowest ask</span>
+    <strong>{{ format_value(s.lowest_ask, rates) }}</strong>
+    <span class="muted">{{ s.ask_count }} live asks</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Highest bid</span>
+    <strong>{{ format_value(s.highest_bid, rates) }}</strong>
+    <span class="muted">{{ s.bid_count }} live bids</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Confidence</span>
+    <strong class="conf conf-{{ s.confidence }}">{{ s.confidence }}</strong>
+    <span class="muted">{{ s.sold_count }} sales since <time datetime="{{ view.window.start.isoformat() }}">{{ view.window.start.strftime("%b %d") }}</time></span>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Price history</h2>
+  {% if chart %}
+    <ul class="legend">
+      <li><span class="key key-sold"></span>Estimated price (band: 95%) · dots: median sale</li>
+      <li><span class="key key-ask"></span>Median ask</li>
+      <li><span class="key key-reset"></span>Season start</li>
+      <li><span class="key key-gap"></span>Between seasons</li>
+    </ul>
+    <div class="chart-wrap" data-chart>
+      {{ chart.svg }}
+      <div class="tooltip" hidden></div>
+      <script type="application/json">{{ chart.data }}</script>
+    </div>
+    <p class="muted">All values in Ist. Ladder prices on either side of a season line are different markets.</p>
+    <details>
+      <summary>Show as table</summary>
+      <div class="scroll"><table>
+        <thead><tr><th>Day</th><th class="num">Median sold</th><th class="num">Sales</th><th class="num">Median ask</th></tr></thead>
+        <tbody>{% for p in days %}<tr><td>{{ p.day.strftime("%b %d, %Y") }}</td><td class="num">{{ format_value(p.sold_median, rates) }}</td><td class="num">{{ p.sold_count }}</td><td class="num">{{ format_value(p.ask_median, rates) }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </details>
+  {% else %}
+    <p class="muted">Not enough history to draw yet. It takes two days with data.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Alerts</h2>
+  {% if rules %}
+  <ul class="rules">
+    {% for rule, text, threshold in rules %}
+    <li class="{{ '' if rule.enabled else 'off' }}">
+      <div>
+        <strong>{{ text }}</strong>
+        <span class="muted">
+          {% if threshold is not none %}= {{ "%.3g" | format(threshold) }} Ist today · {% endif %}
+          {{ rule.last_reason or "not checked yet" }}
+          {% if rule.last_fired_at %} · last fired {{ humanize(rule.last_fired_at, now) }}{% endif %}
+        </span>
+      </div>
+      <form method="post" action="/rules/{{ rule.id }}/toggle"><button class="quiet">{{ "Pause" if rule.enabled else "Resume" }}</button></form>
+      <form method="post" action="/rules/{{ rule.id }}/delete"><button class="quiet">Delete</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">No alerts on this item yet.</p>
+  {% endif %}
+  <form class="grid" method="post" action="/watch/{{ watch.id }}/rules">
+    <label>When
+      <select name="metric">{% for key, label in metrics.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+    </label>
+    <label>is
+      <select name="direction">{% for key, label in directions.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+    </label>
+    <label>Amount <input name="threshold_amount" type="number" step="any" min="0" required value="1"></label>
+    <label>Currency
+      <input name="threshold_currency" list="currency-options" required value="ber">
+      <datalist id="currency-options">{% for c in currencies %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+    </label>
+    <label>Quiet for (hours) <input name="cooldown_hours" type="number" min="0" value="12"></label>
+    <button>Add alert</button>
+  </form>
+  <p class="muted">Ladder alerts pause between seasons, when only stale listings exist. A rule fires once per crossing and rearms when the price moves back.</p>
+</section>
+
+<section class="card">
+  <h2>Recent listings</h2>
+  {% if listings %}
+  <div class="scroll"><table>
+    <thead><tr><th>Seen</th><th>Kind</th><th>Source</th><th>Price</th></tr></thead>
+    <tbody>
+      {% for listing in listings[:40] %}
+      <tr>
+        <td class="muted">{{ humanize(listing.observed_at, now) }}</td>
+        <td>{{ listing.kind }}</td>
+        <td>{% if listing.url %}<a href="{{ listing.url }}" rel="noreferrer">{{ listing.source }}</a>{% else %}{{ listing.source }}{% endif %}</td>
+        <td>{% for alternative in listing.alternatives %}{% if not loop.first %} <span class="muted">or</span> {% endif %}{% for lot in alternative %}{% if not loop.first %} + {% endif %}{{ "%g" | format(lot[1]) }} {{ lot[0].title() }}{% endfor %}{% endfor %}{% if listing.quantity > 1 %} <span class="muted">for {{ listing.quantity }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+    <p class="muted">No listings in the last two weeks.</p>
+  {% endif %}
+  {% if d2jsp_url %}<p class="muted">Found prices on <a href="{{ d2jsp_url }}" rel="noreferrer">this market's d2jsp forum</a>? <a href="/import">Import them</a>.</p>{% endif %}
+</section>
+{% endblock %}

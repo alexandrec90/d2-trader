@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% block content %}
+{{ ui.season_banner(state, now, phase_labels) }}
+
+<section class="health" aria-label="Data sources">
+  {% for source in health %}
+    <a class="pill status-{{ source.status | replace(' ', '-') }}" href="/sources" title="{{ source.detail or '' }}">
+      {{ source.label }}: {{ source.status }}
+    </a>
+  {% endfor %}
+</section>
+
+{% for watchlist, rows in lists %}
+<section class="card">
+  <div class="card-head">
+    <h2>{{ watchlist.name }}</h2>
+    <form method="post" action="/watchlists/{{ watchlist.id }}/delete">
+      <button class="quiet">Delete list</button>
+    </form>
+  </div>
+  {% if rows %}
+  <div class="scroll">
+  <table>
+    <thead>
+      <tr><th>Item</th><th>Market</th><th class="num">Estimated price</th><th class="num">Lowest ask</th><th class="num">Sold</th><th>Confidence</th><th>Alerts</th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% set s = row.view.summary %}
+      <tr>
+        <td>
+          <a href="/watch/{{ row.watch.id }}">{{ row.watch.item.name }}</a>
+          {% if row.watch.ethereal %}<span class="tag">eth</span>{% elif row.watch.ethereal is false %}<span class="tag">non-eth</span>{% endif %}
+        </td>
+        <td class="muted">{{ row.market_label }}</td>
+        {% if row.view.window.closed %}
+          <td colspan="4" class="muted">Closed between seasons</td>
+        {% else %}
+          <td class="num">{% if s.estimate %}{{ format_like(s.estimate.value, s.estimate.high, row.rates) }}<br><span class="muted">95%: {{ format_range(s.estimate.low, s.estimate.high, row.rates) }}</span>{% else %}–{% endif %}</td>
+          <td class="num">{{ format_value(s.lowest_ask, row.rates) }}</td>
+          <td class="num">{{ s.sold_count }}</td>
+          <td><span class="conf conf-{{ s.confidence }}">{{ s.confidence }}{% if s.confidence != "none" %} · {{ s.basis }}{% endif %}</span></td>
+        {% endif %}
+        <td class="muted">{{ row.watch.rules | selectattr("enabled") | list | length }} active</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="muted">Nothing on this list yet.</p>
+  {% endif %}
+
+  <details>
+    <summary>Add an item</summary>
+    <form class="grid" method="post" action="/watchlists/{{ watchlist.id }}/items">
+      <label class="wide">Item
+        <input name="item" list="item-options" autocomplete="off" required placeholder="Harlequin Crest" data-item-search>
+      </label>
+      {{ ui.market_fields(default_market) }}
+      <button>Add</button>
+    </form>
+  </details>
+</section>
+{% else %}
+<section class="card empty">
+  <h2>Start a watchlist</h2>
+  <p class="muted">A watchlist groups the items you care about. Each entry tracks one market, because softcore ladder and hardcore non-ladder prices have nothing to do with each other.</p>
+</section>
+{% endfor %}
+
+<section class="card">
+  <form class="inline" method="post" action="/watchlists">
+    <label>New watchlist <input name="name" required placeholder="Season 16 shopping"></label>
+    <button>Create</button>
+  </form>
+</section>
+<datalist id="item-options"></datalist>
+{% endblock %}
