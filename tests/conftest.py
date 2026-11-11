@@ -40,9 +40,19 @@ def fresh_pacing():
     LAST_REQUEST.clear()
 
 
-def pytest_asyncio_loop_factories(config, item):
-    """psycopg's async mode cannot run on Windows' default proactor loop."""
-    return {"selector": asyncio.SelectorEventLoop} if sys.platform == "win32" else None
+def loop_factories(platform: str) -> dict | None:
+    """psycopg's async mode cannot run on Windows' default proactor loop.
+
+    `None` means the default loop is fine, and then no hook may exist at all:
+    pytest-asyncio fails collection when the hook returns anything but a non-empty mapping.
+    """
+    return {"selector": asyncio.SelectorEventLoop} if platform == "win32" else None
+
+
+if loop_factories(sys.platform) is not None:
+
+    def pytest_asyncio_loop_factories(config, item):
+        return loop_factories(sys.platform)
 
 
 def isolated_database_url(url: str) -> str:
