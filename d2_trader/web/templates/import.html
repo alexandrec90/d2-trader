@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% block title %}Import · D2 Trader{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Import prices</h1>
+  <p class="muted">d2jsp forbids automation, so its prices arrive by hand: read a thread, paste the lines here. One price per line, for example <code>2 ber</code>, <code>150 fg</code>, <code>3 ist + 1 vex</code> or <code>200fg or ber</code>.</p>
+</section>
+
+<section class="card">
+  <h2>Prices for one item</h2>
+  <form class="grid" method="post" action="/import">
+    <label class="wide">Item
+      <input name="item" list="item-options" autocomplete="off" required data-item-search>
+    </label>
+    {{ ui.market_fields(default_market) }}
+    <label>These are
+      <select name="kind"><option value="ask">Asking prices</option><option value="sold">Completed sales</option><option value="bid">Offers to buy</option></select>
+    </label>
+    <label class="full">Lines
+      <textarea name="text" rows="8" required placeholder="selling for 2 ber&#10;sold 150 fg"></textarea>
+    </label>
+    <button>Import</button>
+  </form>
+  <datalist id="item-options"></datalist>
+</section>
+
+<section class="card">
+  <h2>Rune price list</h2>
+  <p class="muted">Paste a d2jsp rune price list, one rune per line: <code>Ber 150fg</code>, <code>2 jah 360 fg</code>, <code>Ist: 8fg</code>. These set the forum gold rate on the <a href="/rates">Rates</a> page.</p>
+  <form class="grid" method="post" action="/import">
+    <input type="hidden" name="paste_as" value="runes">
+    {{ ui.market_fields(default_market) }}
+    <label>These are
+      <select name="kind"><option value="ask">Asking prices</option><option value="sold">Completed sales</option></select>
+    </label>
+    <label class="full">Lines
+      <textarea name="text" rows="8" required placeholder="Ber 150fg&#10;Jah 180fg&#10;Ist 8fg"></textarea>
+    </label>
+    <button>Import rune prices</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>d2jsp trading forums</h2>
+  <ul>
+    {% for label, url in forum_links %}{% if url %}<li><a href="{{ url }}" rel="noreferrer">{{ label }}</a></li>{% endif %}{% endfor %}
+  </ul>
+</section>
+{% endblock %}

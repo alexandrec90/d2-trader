@@ -16,13 +16,22 @@
 #
 # Regenerate only when adopting the gate: python scripts/hooks/structure_check.py --seed
 dependency::pyproject.toml::alembic = 1
+dependency::pyproject.toml::beautifulsoup4 = 1
+dependency::pyproject.toml::fastapi = 1
+dependency::pyproject.toml::httpx = 1
+dependency::pyproject.toml::jinja2 = 1
+dependency::pyproject.toml::markupsafe = 1
 dependency::pyproject.toml::mypy = 1
 dependency::pyproject.toml::pre-commit = 1
 dependency::pyproject.toml::psycopg = 1
+dependency::pyproject.toml::pydantic = 1
 dependency::pyproject.toml::pydantic-settings = 1
 dependency::pyproject.toml::pytest = 1
+dependency::pyproject.toml::pytest-asyncio = 1
 dependency::pyproject.toml::pytest-cov = 1
+dependency::pyproject.toml::python-multipart = 1
 dependency::pyproject.toml::ruff = 1
 dependency::pyproject.toml::sqlalchemy = 1
+dependency::pyproject.toml::uvicorn = 1
 suppressions::scripts/notify-wrap.py = 1
 swallowed_errors::scripts/notify.py = 1

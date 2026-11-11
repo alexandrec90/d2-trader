@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Inbox · D2 Trader{% endblock %}
+{% block content %}
+<section class="card-head page-head">
+  <h1>Inbox</h1>
+  <form method="post" action="/notifications/read"><button class="quiet">Mark all read</button></form>
+</section>
+<section class="card">
+  {% if items %}
+  <ul class="inbox">
+    {% for item in items %}
+    <li class="{{ 'unread' if not item.read_at }}">
+      <span class="tag">{{ item.kind }}</span>
+      <div>
+        <strong>{% if item.url %}<a href="{{ item.url }}">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}</strong>
+        <p>{{ item.body }}</p>
+        <span class="muted">{{ humanize(item.created_at, now) }}{% for channel, result in item.delivery.items() %} · {{ channel }}: {{ result }}{% endfor %}</span>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="muted">Nothing yet. Price alerts and season news will land here.</p>
+  {% endif %}
+  <p class="muted"><button class="quiet" type="button" data-enable-browser-alerts hidden>Show browser notifications while this tab is open</button></p>
+</section>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% block title %}Seasons · D2 Trader{% endblock %}
+{% block content %}
+{{ ui.season_banner(state, now, phase_labels) }}
+
+<section class="card">
+  <h2>Calendar</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Season</th><th>Start (UTC)</th><th>Source</th><th>End (UTC)</th><th>Source</th><th class="num">Length</th></tr></thead>
+    <tbody>
+      {% for season in seasons %}
+      <tr>
+        <td>{% if season.url %}<a href="{{ season.url }}" rel="noreferrer">Season {{ season.number }}</a>{% else %}Season {{ season.number }}{% endif %}</td>
+        <td>{{ season.starts_at.strftime("%b %d, %Y %H:%M") }}</td>
+        <td class="muted">{{ season.start_source }}</td>
+        <td>{% if season.ends_at %}{{ season.ends_at.strftime("%b %d, %Y %H:%M") }}{% else %}<span class="muted">not announced</span>{% endif %}</td>
+        <td class="muted">{{ season.end_source or "" }}</td>
+        <td class="num">{% if season.ends_at %}{{ (season.ends_at - season.starts_at).days }}d{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="muted">An unannounced end is estimated from the typical season length, {{ typical_days }} days, and is labelled as an estimate wherever it appears. Blizzard usually publishes exact dates 1-2 weeks ahead.</p>
+</section>
+
+<section class="card">
+  <h2>How resets change prices here</h2>
+  <dl class="plain">
+    <div><dt>Launch, first 14 days</dt><dd>Ladder prices start high and fall as supply grows. The range uses only the last 3 days of this season.</dd></div>
+    <div><dt>Season ending, last 21 days</dt><dd>Ladder prices slide. Notifications say so, so a low price is not mistaken for a bargain that lasts.</dd></div>
+    <div><dt>Between seasons</dt><dd>Ladder markets are closed: no ranges, and alerts pause. Non-ladder windows restart, because ladder items have just arrived there.</dd></div>
+    <div><dt>Always</dt><dd>A ladder range never includes a sale from an earlier season.</dd></div>
+  </dl>
+</section>
+
+<section class="card">
+  <h2>Correct a date</h2>
+  <form class="grid" method="post" action="/seasons">
+    <label>Season <input name="number" type="number" min="1" required></label>
+    <label>Start (UTC) <input name="starts_at" type="datetime-local"></label>
+    <label>End (UTC) <input name="ends_at" type="datetime-local"></label>
+    <button>Save</button>
+  </form>
+  <p class="muted">A date entered here outranks every source and will not be overwritten by a sync.</p>
+</section>
+{% endblock %}

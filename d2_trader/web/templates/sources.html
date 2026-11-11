@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Sources · D2 Trader{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Data sources</h1>
+  <p class="muted">A source that refuses this app is recorded as blocked and left alone for longer. It is never retried under another identity.</p>
+</section>
+<section class="card">
+  <div class="scroll"><table>
+    <thead><tr><th>Job</th><th>Status</th><th>Last finished</th><th class="num">Records</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for source in health %}
+      <tr>
+        <td>{{ source.label }}</td>
+        <td><span class="pill status-{{ source.status | replace(' ', '-') }}">{{ source.status }}</span></td>
+        <td class="muted">{% if source.last_at %}{{ humanize(source.last_at, now) }}{% else %}never{% endif %}</td>
+        <td class="num">{{ source.records }}</td>
+        <td class="muted">{{ source.detail or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+<section class="card">
+  <h2>Where the data comes from</h2>
+  <dl class="plain">
+    <div><dt>diablo2.io</dt><dd>Item catalog, plus the last 10 sales per item, lagged 3 days. Automatic, within its robots.txt, once a day.</dd></div>
+    <div><dt>Traderie</dt><dd>Live asks, bids and completed trades per market. Off by default because its Terms of Service forbid automated access. See the README before setting <code>TRADERIE_ENABLED</code>.</dd></div>
+    <div><dt>d2jsp</dt><dd>Paste only, on the <a href="/import">Import</a> page. Its rules forbid automation.</dd></div>
+    <div><dt>Blizzard news</dt><dd>The official season schedule, checked every few hours, and cross-checked against diablo2.io's announcement.</dd></div>
+  </dl>
+</section>
+{% endblock %}

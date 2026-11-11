@@ -47,8 +47,10 @@ ignore = ["E101", "E401", "E501", "E701", "E702", "E703", "E731", "E741", "E742"
 # same subprocess allowances as `scripts/**`. These arrive vendored
 # from devkit, so this line must stay in step with devkit's own ruff.toml.
 ".claude/skills/**/*.py" = ["S603", "S607", "S310"]
-# Tests: asserts (S101) and hardcoded test passwords (S105).
-"tests/**/*.py" = ["S101", "S105"]
+# Tests: asserts (S101), hardcoded test passwords (S105), and seeded `random.Random`
+# (S311), which the price-model tests use to simulate markets whose truth is known. A
+# seeded generator is the point there; nothing in a test is a secret.
+"tests/**/*.py" = ["S101", "S105", "S311"]
 "scripts/hooks/tests/**/*.py" = ["S101", "S105"]
 
 [format]

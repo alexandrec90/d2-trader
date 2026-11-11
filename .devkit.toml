@@ -101,6 +101,10 @@ head_bytes = 2000
 #paths = ["d2_trader/"]
 #only_in = ["d2_trader/repositories/"]
 
+[structure]
+# Loaded by the browser, from a template's <script> tag, so no Python imports it.
+entrypoints = ["d2_trader/web/static/"]
+
 # Tier 2b: host pytest against the DB over its published compose port.
 #
 # NOTE the port. `db_port` is the *host* port, so it differs per worktree — this

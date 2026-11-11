@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Rates · D2 Trader{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Currency rates</h1>
+  <p class="muted">Everything is valued in Ist. These are the defaults; markets with their own measured rates are listed below.</p>
+</section>
+
+<section class="card">
+  <h2>Forum gold</h2>
+  {% if fg_pinned %}
+    <p class="note">Pinned by hand at {{ "%.3g" | format(1 / rates["fg"]) }} fg per Ist. Clear the <strong>fg</strong> row below to measure it again.</p>
+  {% endif %}
+  {% for market in fg_markets %}
+    {% set e = market.current %}
+    <h3>{{ market.label }}</h3>
+    {% if e %}
+      {% set ist = 1 / e.ist_per_fg %}
+      <p class="fg-headline"><strong>1 Ist = {{ "%.3g" | format(ist) }} fg</strong>
+        <span class="muted">95% CI {{ "%.3g" | format(1 / e.high) }} to {{ "%.3g" | format(1 / e.low) }} fg</span>
+        <span class="muted">· 1 Ber = {{ "%.0f" | format(ist * market.ber_ist) }} fg</span>
+        {% if not e.observations %}<span class="muted">· no prices today, so the interval is wider</span>{% endif %}
+      </p>
+      {% if market.chart %}
+        <div class="chart-wrap" data-chart>
+          {{ market.chart.svg }}
+          <div class="tooltip" hidden></div>
+          <script type="application/json">{{ market.chart.data }}</script>
+        </div>
+      {% endif %}
+      {% if market.readings %}
+      <div class="scroll"><table>
+        <caption class="muted">Last 7 days, by rune</caption>
+        <thead><tr><th>Rune</th><th class="num">d2jsp (fg)</th><th class="num">Traderie (Ist)</th><th class="num">fg per Ist</th><th class="num">Prices</th></tr></thead>
+        <tbody>{% for r in market.readings %}<tr><td>{{ r.rune.title() }}</td><td class="num">{{ "%.4g" | format(r.fg_median) }}</td><td class="num">{{ "%.3g" | format(r.ist_value) }}</td><td class="num">{{ "%.3g" | format(1 / r.ist_per_fg) }}</td><td class="num">{{ r.quotes }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% endif %}
+    {% endif %}
+  {% else %}
+    <p class="muted">Not measured yet. Paste a d2jsp rune price list on the <a href="/import">Import</a> page, and each rune that Traderie also values gives a reading.</p>
+  {% endfor %}
+  <p class="muted">Every fg price of a rune is one reading: the rune's value in Ist from Traderie trades, over the fg it went for. All readings feed one model of the rate as a random walk with drift, so a day with no prices still has a rate, a reading far from the rest counts for less, and a reset lets the rate jump. The band is its 95% interval: it widens when prices are scarce. An fg price from any day is valued at the model's rate for that day.</p>
+</section>
+
+<section class="card">
+  <h2>Set a rate</h2>
+  <form class="grid" method="post" action="/rates">
+    <label>Currency <input name="currency" list="currency-options" required placeholder="fg">
+      <datalist id="currency-options">{% for c in rates %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+    </label>
+    <label>Worth, in Ist <input name="value_ist" type="number" step="any" min="0" required></label>
+    <button>Save</button>
+  </form>
+  <p class="muted">A rate set here beats a measured one in every market, forum gold included, until you clear it.</p>
+</section>
+
+<section class="card">
+  <div class="scroll"><table>
+    <thead><tr><th>Currency</th><th class="num">Worth (Ist)</th><th>Set by</th><th></th></tr></thead>
+    <tbody>
+      {% for currency, value in rates.items() %}
+      <tr>
+        <td>{{ currency.title() }}</td>
+        <td class="num">{{ "%.3g" | format(value) }}</td>
+        <td class="muted">{{ "manual" if currency in manual else "seed" }}</td>
+        <td>{% if currency in manual %}<form method="post" action="/rates/{{ currency }}/clear"><button class="quiet">Clear</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+
+{% if derived %}
+<section class="card">
+  <h2>Measured from trades</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Currency</th><th>Market id</th><th class="num">Worth (Ist)</th><th class="num">Trades</th></tr></thead>
+    <tbody>{% for row in derived %}<tr><td>{{ row.currency.title() }}</td><td>{{ row.market_id }}</td><td class="num">{{ "%.3g" | format(row.value_ist) }}</td><td class="num">{{ row.samples }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endblock %}
