@@ -28,6 +28,7 @@ scripts/lint-all.py::changed_python_files
 scripts/lint-all.py::conftest_root
 scripts/lint-all.py::desktop_section
 scripts/lint-all.py::desktop_targets
+scripts/lint-all.py::dotnet_sdk_missing
 scripts/lint-all.py::env_files
 scripts/lint-all.py::explicit_paths
 scripts/lint-all.py::frontend_section
@@ -80,6 +81,7 @@ scripts/run-tests.py::changed_paths
 scripts/run-tests.py::contracts_beyond
 scripts/run-tests.py::default_branch
 scripts/run-tests.py::desktop_sources
+scripts/run-tests.py::dotnet_sdk_missing
 scripts/run-tests.py::explicit_runs
 scripts/run-tests.py::filter_output
 scripts/run-tests.py::frontend_run
