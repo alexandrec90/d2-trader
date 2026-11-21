@@ -11,10 +11,12 @@ from d2_trader.stats import DayPoint
 from d2_trader.web.charts import (
     Chart,
     Scale,
+    daily_medians,
     fg_per_ist,
     nice_ceiling,
     price_chart,
     rate_chart,
+    rune_chart,
     split_runs,
 )
 
@@ -185,3 +187,54 @@ def test_scale_maps_values_inside_the_plot():
 def test_scale_survives_a_single_day_range():
     scale = Scale(date(2026, 11, 1), date(2026, 11, 1), 10)
     assert scale.days == 1
+
+
+# --- rune values ------------------------------------------------------------------
+
+
+def rune_path(values, start=date(2026, 11, 14)):
+    return [
+        PathPoint(start + timedelta(days=i), v, v * 0.9, v * 1.1, 1) for i, v in enumerate(values)
+    ]
+
+
+def lo_chart(path, observed=()):
+    return rune_chart(path, list(observed), [], ber=12.0, now=NOW, title="Lo in Ist")
+
+
+def test_one_day_of_a_rune_is_not_a_chart():
+    assert lo_chart(rune_path([6.0])) is None
+
+
+def test_a_rune_chart_draws_the_path_its_band_and_a_dot_per_trading_day():
+    path = rune_path([6.0, 6.2, 6.1])
+    observed = [(path[0].day, 5.0), (path[0].day, 7.0), (path[2].day, 6.0)]
+    drawn = lo_chart(path, observed)
+    assert drawn.svg.count('class="band sold"') == 1
+    assert drawn.svg.count('class="line sold"') == 1
+    assert drawn.svg.count('class="dot sold"') == 2  # Two days had trades.
+
+
+def test_a_bait_trade_does_not_stretch_the_rune_axis():
+    path = rune_path([6.0, 6.0, 6.0])
+    drawn = lo_chart(path, [(path[1].day, 600.0)])
+    assert 'class="dot sold"' not in drawn.svg
+    assert ">8<" in drawn.svg  # The axis tops out near the path, not at 600.
+    rows = json.loads(drawn.data)
+    assert "Median trade: 600 Ist (1 trades)" in rows[1]["lines"]
+
+
+def test_rune_tooltips_give_ist_ber_and_the_evidence():
+    path = rune_path([6.0, 6.0])
+    rows = json.loads(lo_chart(path, [(path[0].day, 6.0)]).data)
+    assert rows[0]["lines"][0] == "Estimate: 6 Ist (0.5 Ber)"
+    assert rows[0]["lines"][1] == "95% CI 5.4 to 6.6 Ist"
+    assert rows[1]["lines"][2] == "No trades that day: estimated"
+
+
+def test_daily_medians_count_each_days_trades():
+    d = date(2026, 11, 14)
+    assert daily_medians([(d, 1.0), (d, 3.0), (d + timedelta(days=1), 5.0)]) == {
+        d: (2.0, 2),
+        d + timedelta(days=1): (5.0, 1),
+    }

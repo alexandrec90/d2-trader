@@ -1,0 +1,28 @@
+# The d2-trader stack was first deployed from the worktree `.claude/worktrees/linear-seeking-lagoon`,
+# whose bind mount (`.:/app`) the containers still use. Once this branch merges, the stack
+# belongs to the main checkout.
+when = "merged"
+on = "DESKTOP-ML5F3PJ"
+agent = """
+Move the running d2-trader Docker stack from the worktree to the main checkout of this
+project, on this machine.
+
+Context: the stack (services db, migrate, app, worker; COMPOSE_PROJECT_NAME=d2-trader;
+ports 8010 and 5442; data volume d2-trader_pgdata) was started with
+`docker compose up -d --build` from `.claude/worktrees/linear-seeking-lagoon`. The app and
+worker bind-mount that tree as /app, so they run its code, not the checkout's. The
+checkout has no `.env`; the worktree's `.env` is a copy of `.env.example` with
+TRADERIE_ENABLED=true, which the operator chose (README, "Data sources").
+
+Steps:
+1. Run `docker ps` first; a daemon error means Docker Desktop is stopped: start it.
+2. Fast-forward the main checkout to origin's default branch, which now holds the rune
+   model (`d2_trader/rune_model.py` must exist; if not, stop and report).
+3. If the checkout has no `.env`, copy `.claude/worktrees/linear-seeking-lagoon/.env`
+   there; if that file is gone too, copy `.env.example`. Never overwrite an existing `.env`.
+4. From the checkout: `docker compose up -d --build`. The project name is the same, so
+   this recreates the same containers on the same volume: no data is lost.
+5. Done when `docker inspect d2-trader-app-1 --format "{{range .Mounts}}{{.Source}} {{end}}"`
+   names the checkout, not the worktree; http://127.0.0.1:8010/runes answers 200; and
+   `docker compose exec -T app python -m d2_trader rune-value lo` prints a value.
+"""

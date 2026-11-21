@@ -6,6 +6,7 @@ meaningless and the chart has to say so. Hover detail is in `static/app.js`.
 """
 
 import json
+import statistics
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html import escape
@@ -255,6 +256,68 @@ def rate_chart(
     scale = Scale(points[0][0], max(points[-1][0], now.date()), nice_ceiling(peak))
     marks = [*_seasons(seasons, scale, now), *_grid(scale), *_date_axis(scale)]
     return _finish([*marks, *_rate_marks(points, scale)], _rate_rows(points, scale), title)
+
+
+def daily_medians(observed: list[tuple[date, float]]) -> dict[date, tuple[float, int]]:
+    """Each day's median implied value, and how many trades it is the median of."""
+    by_day: dict[date, list[float]] = {}
+    for day, value in observed:
+        by_day.setdefault(day, []).append(value)
+    return {day: (statistics.median(v), len(v)) for day, v in sorted(by_day.items())}
+
+
+def _rune_rows(
+    path: list[PathPoint], medians: dict[date, tuple[float, int]], scale: Scale, ber: float
+) -> list[dict]:
+    rows = []
+    for p in path:
+        lines = [
+            f"Estimate: {p.value:.3g} Ist ({p.value / ber:.3g} Ber)",
+            f"95% CI {p.low:.3g} to {p.high:.3g} Ist",
+        ]
+        if p.day in medians:
+            median, count = medians[p.day]
+            lines.append(f"Median trade: {median:.3g} Ist ({count} trades)")
+        else:
+            lines.append("No trades that day: estimated")
+        rows.append({"x": scale.x(p.day), "day": f"{p.day:%b %d, %Y}", "lines": lines})
+    return rows
+
+
+def rune_chart(
+    path: list[PathPoint],
+    observed: list[tuple[date, float]],
+    seasons: list[Season],
+    *,
+    ber: float,
+    now: datetime,
+    title: str,
+) -> Chart | None:
+    """A rune's modelled value in Ist, its 95% band, and each day's median trade as a dot.
+
+    A trade's dot is what it implied the rune was worth, with the other side valued at
+    the model's estimate. A bait trade's dot can sit far off the scale; it is left out of
+    the drawing but not the tooltip, as the band is cut at the top.
+    """
+    if len(path) < MIN_POINTS:
+        return None
+    medians = daily_medians(observed)
+    peak = max(min(p.high, 2 * p.value) for p in path)
+    peak = max([peak, *(m for m, _ in medians.values() if m <= 2 * peak)])
+    scale = Scale(path[0].day, max(path[-1].day, now.date()), nice_ceiling(peak))
+    dots = [
+        f'<circle class="dot sold" cx="{scale.x(day)}" cy="{scale.y(median)}" r="4"/>'
+        for day, (median, _) in medians.items()
+        if median <= scale.ceiling and _in_range(day, scale)
+    ]
+    marks = [
+        *_seasons(seasons, scale, now),
+        *_grid(scale),
+        *_date_axis(scale),
+        *_estimate(path, scale),
+        *dots,
+    ]
+    return _finish(marks, _rune_rows(path, medians, scale, ber), title)
 
 
 def price_chart(

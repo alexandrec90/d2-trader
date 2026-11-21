@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% block title %}Runes · D2 Trader{% endblock %}
+{% block content %}
+<section class="page-head">
+  <h1>Rune values</h1>
+  <p class="muted">{{ market.label }} · from {{ trades }} rune-for-rune trades this season</p>
+  {% if markets | length > 1 %}
+  <nav class="market-picker" aria-label="Market">
+    {% for m, query in markets %}
+      <a href="/runes?{{ query }}" {% if m == market %}aria-current="page"{% endif %}>{{ m.label }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+</section>
+
+{% if panels %}
+<div class="rune-grid">
+  {% for p in panels %}
+  <section class="card rune-card">
+    <h2>{{ p.rune.title() }}
+      <span class="rune-value">{{ "%.3g" | format(p.today.value) }} Ist</span>
+      {% if p.rune != "ber" %}<span class="muted">· {{ "%.3g" | format(p.today.value / p.ber) }} Ber</span>{% endif %}
+    </h2>
+    <p class="muted">95% CI {{ "%.3g" | format(p.today.low) }} to {{ "%.3g" | format(p.today.high) }} Ist · {{ p.direct }} trades name it</p>
+    {% if p.chart %}
+      <div class="chart-wrap" data-chart>
+        {{ p.chart.svg }}
+        <div class="tooltip" hidden></div>
+        <script type="application/json">{{ p.chart.data }}</script>
+      </div>
+    {% else %}
+      <p class="muted">One day of trades so far: a line needs two.</p>
+    {% endif %}
+    {% set a = p.asks %}
+    {% if a and a.cheapest %}
+    <div class="scroll"><table class="asks">
+      <caption class="muted">Cheapest {{ a.cheapest | length }} asks, as of {{ humanize(a.seen_at, now) }}{% if a.hidden %} · {{ a.hidden }} bait-priced hidden{% endif %}</caption>
+      <thead><tr><th>Asking</th><th class="num">Ist each</th><th class="num">vs estimate</th><th>Listed</th></tr></thead>
+      <tbody>
+        {% for ask in a.cheapest %}
+        <tr>
+          <td>{% if ask.listing.url %}<a href="{{ ask.listing.url }}" rel="noreferrer">{{ ui.listing_price(ask.listing) }}</a>{% else %}{{ ui.listing_price(ask.listing) }}{% endif %}</td>
+          <td class="num">{{ "%.3g" | format(ask.value) }}</td>
+          <td class="num">{{ "%+.0f%%" | format((ask.value / p.today.value - 1) * 100) }}</td>
+          <td class="muted">{{ humanize(ask.listing.observed_at, now) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+      <p class="muted">No open asks seen in the last {{ every }} hours.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+<section class="card">
+  <p class="muted">The line is the model's value for each day and the band its 95% interval; a dot is the median of that day's trades naming the rune. No trade states a value in Ist, so a dot values the other side of each trade at the model's own estimate for the day. Every rune is fitted together from every trade, so a rune's line also moves with trades it is not in: a Ber sold for Ist moves Lo, through the Lo-for-Ber trades. Each value is a random walk, so a day without trades still has one, its band wider. A dashed rule is a ladder reset, where every value may jump.</p>
+  <p class="muted">Asks come from Traderie's latest page of open listings for each rune, fetched with the trades every {{ every }} hours, so one may have sold since. Each is valued per rune at its cheapest alternative, at today's rune values; one priced far from the rest of that rune's asks is hidden as bait. "vs estimate" compares it with the line above.</p>
+</section>
+{% else %}
+<section class="card">
+  <p class="muted">No rune trades stored for this market yet. The rates job collects them every 12 hours; <code>python -m d2_trader run rates</code> runs it now.</p>
+</section>
+{% endif %}
+{% endblock %}

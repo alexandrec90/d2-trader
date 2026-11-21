@@ -4,7 +4,6 @@ A listing's price is a list of alternatives, any one of which the seller accepts
 alternative is a list of (currency, quantity) lots that are all paid together.
 """
 
-import statistics
 from collections.abc import Iterable, Mapping
 
 Alternative = list[tuple[str, float]]
@@ -51,8 +50,8 @@ RUNES = (
 # What a price shows when there is none.
 NO_VALUE = "\N{EN DASH}"
 DISPLAY_UNITS = ("zod", "ber", "lo", "ist")
+# Trades naming a rune before the rune model's value replaces its seed.
 MIN_RATE_SAMPLES = 5
-MAX_RATE_DRIFT = 5.0
 
 
 def normalize_currency(name: str) -> str:
@@ -137,31 +136,3 @@ def format_range(
     if unit is None:
         return f"{low:.2g} to {high:.2g} Ist"
     return f"{low / rates[unit]:.3g} to {format_in(high, unit, rates)}"
-
-
-def derive_rates(
-    quotes: Mapping[str, list[tuple[str, float]]],
-    seeds: Mapping[str, float],
-) -> tuple[dict[str, float], dict[str, int]]:
-    """Each rune's value from what it actually traded for, in units of the other runes.
-
-    `quotes[rune]` holds (paid_in, quantity_per_rune). Values feed each other, so this
-    relaxes for a few passes from the seeds. Ist stays fixed at 1 because it is the unit.
-    A rune with too few trades keeps its seed, and a result far from its seed is rejected
-    as a thin market rather than a real move.
-    """
-    rates = dict(seeds)
-    counts: dict[str, int] = {}
-    for _ in range(4):
-        updated = dict(rates)
-        for rune, trades in quotes.items():
-            priced = [q * rates[c] for c, q in trades if c in rates and c != rune]
-            counts[rune] = len(priced)
-            if rune == BASE_CURRENCY or len(priced) < MIN_RATE_SAMPLES:
-                continue
-            value = statistics.median(priced)
-            seed = seeds.get(rune, value)
-            if seed / MAX_RATE_DRIFT <= value <= seed * MAX_RATE_DRIFT:
-                updated[rune] = value
-        rates = updated
-    return rates, counts
