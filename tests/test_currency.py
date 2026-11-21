@@ -2,7 +2,6 @@ from d2_trader.currency import (
     NO_VALUE,
     SEED_RATES,
     alternative_value,
-    derive_rates,
     format_in,
     format_like,
     format_range,
@@ -103,35 +102,3 @@ def test_a_value_can_be_stated_in_a_chosen_currency():
 def test_seeds_rank_high_runes_in_the_order_they_trade():
     assert SEED_RATES["ist"] < SEED_RATES["vex"] < SEED_RATES["lo"] < SEED_RATES["ber"]
     assert SEED_RATES["ist"] == 1.0
-
-
-def test_derive_uses_real_trades_and_counts_them():
-    quotes = {"ber": [("ist", 15.0)] * 6}
-    rates, counts = derive_rates(quotes, RATES)
-    assert rates["ber"] == 15.0
-    assert counts["ber"] == 6
-
-
-def test_derive_needs_enough_trades():
-    rates, _ = derive_rates({"ber": [("ist", 15.0)] * 4}, RATES)
-    assert rates["ber"] == 10.0
-
-
-def test_derive_ignores_a_wild_outlier_by_taking_the_median():
-    # A real row from the sampled data: one Ohm "sold" for 0.02 Ohm.
-    trades = [("ist", 15.0)] * 5 + [("ist", 0.02)]
-    assert derive_rates({"ber": trades}, RATES)[0]["ber"] == 15.0
-
-
-def test_derive_rejects_an_impossible_move_as_a_thin_market():
-    assert derive_rates({"ber": [("ist", 500.0)] * 6}, RATES)[0]["ber"] == 10.0
-
-
-def test_ist_stays_the_unit():
-    assert derive_rates({"ist": [("ber", 1.0)] * 9}, RATES)[0]["ist"] == 1.0
-
-
-def test_derive_skips_quotes_in_the_rune_itself_and_in_unknown_currencies():
-    rates, counts = derive_rates({"ber": [("ber", 1.0), ("mystery", 2.0)] * 6}, RATES)
-    assert rates["ber"] == 10.0
-    assert counts["ber"] == 0

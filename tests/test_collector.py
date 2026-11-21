@@ -8,11 +8,15 @@ from sqlalchemy import func, select
 from test_diablo2io import BANNER, page, sale
 from test_traderie import raw_listing
 
+from d2_trader.currency import SEED_RATES
 from d2_trader.markets import MarketKey
+from d2_trader.sources.traderie import RUNE_ITEM_IDS
 from d2_trader.models import Item, Listing, Notification, Watchlist
 from d2_trader.services import collector
 from d2_trader.services.calendar import ensure_seed_seasons, load_seasons
+from d2_trader.services.catalog import get_or_create_market
 from d2_trader.services.collector import (
+    RUNE_KINDS,
     SourceDisabled,
     Target,
     shuffled,
@@ -157,13 +161,77 @@ async def test_a_blocked_traderie_stops_the_run(session, settings, watch):
         await collector.collect_traderie(session, settings, NOW, transport(pages))
 
 
+def rune_sales(sold: dict[str, list[dict]]):
+    """Traderie answering each rune's completed sales with `sold[rune]`, or nothing."""
+    return rune_listings(sold, {})
+
+
+def rune_listings(sold: dict[str, list[dict]], asks: dict[str, list[dict]], seen=None):
+    """Traderie answering each rune's sales and open asks, and recording what was asked."""
+    by_kind = {
+        kind: {RUNE_ITEM_IDS[rune]: rows for rune, rows in found.items()}
+        for kind, found in (("sold", sold), ("ask", asks))
+    }
+
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nDisallow:\n")
+        query = parse_qs(request.url.query.decode())
+        kind = "sold" if query.get("completed") == ["true"] else "ask"
+        if seen is not None:
+            seen.append((query["item"][0], kind))
+        return httpx.Response(200, json={"listings": by_kind[kind].get(query["item"][0], [])})
+
+    return httpx.MockTransport(handler)
+
+
+def sold_for_ist(n: int, ist: float) -> dict:
+    return raw_listing(id=f"s{n}", prices=[{"name": "Ist Rune", "quantity": ist, "group": 0}])
+
+
 async def test_rates_are_measured_per_watched_market(session, settings, watch):
     settings.traderie_enabled = True
-    sold_for_jah = raw_listing(prices=[{"name": "Ist Rune", "quantity": 40, "group": 0}])
-    pages = {"/api/diablo2resurrected/listings": (200, {"listings": [sold_for_jah] * 6})}
-    await collector.refresh_rates(session, settings, NOW, transport(pages))
-    assert (await load_rates(session, watch.market_id))["jah"] == 40.0
+    sales = rune_sales({"jah": [sold_for_ist(n, 40) for n in range(6)]})
+    await collector.refresh_rates(session, settings, NOW, sales)
+    assert (await load_rates(session, watch.market_id))["jah"] == pytest.approx(40, rel=0.05)
     assert await rate_rows(session)
+
+
+async def test_rune_sales_are_kept_under_the_rune(session, settings, watch):
+    """Kept, so the next fit still has them after Traderie's page has moved on."""
+    settings.traderie_enabled = True
+    sales = rune_sales({"jah": [sold_for_ist(n, 40) for n in range(6)]})
+    await collector.refresh_rates(session, settings, NOW, sales)
+    jah = (await session.execute(select(Item).where(Item.name == "Jah"))).scalar_one()
+    assert jah.traderie_id == RUNE_ITEM_IDS["jah"]
+    assert await count(session) == 6
+    await collector.refresh_rates(session, settings, NOW, rune_sales({}))
+    assert (await load_rates(session, watch.market_id))["jah"] == pytest.approx(40, rel=0.05)
+
+
+async def test_each_runes_sales_and_open_asks_are_fetched_once(session, settings):
+    settings.traderie_enabled = True
+    seen = []
+    await collector.refresh_rates(session, settings, NOW, rune_listings({}, {}, seen))
+    assert sorted(seen) == sorted((i, k) for i in RUNE_ITEM_IDS.values() for k in RUNE_KINDS)
+
+
+async def test_rune_asks_are_kept_but_never_value_a_rune(session, settings):
+    """An ask is not a trade: ten silly asks leave Jah at its seed."""
+    settings.traderie_enabled = True
+    asks = rune_listings({}, {"jah": [sold_for_ist(n, 400) for n in range(10)]})
+    await collector.refresh_rates(session, settings, NOW, asks)
+    kinds = (await session.execute(select(Listing.kind))).scalars().all()
+    assert kinds == ["ask"] * 10
+    default = await get_or_create_market(session, MarketKey())
+    assert (await load_rates(session, default.id))["jah"] == SEED_RATES["jah"]
+
+
+async def test_a_rune_with_too_few_trades_keeps_its_seed(session, settings, watch):
+    settings.traderie_enabled = True
+    sales = rune_sales({"jah": [sold_for_ist(n, 40) for n in range(4)]})
+    await collector.refresh_rates(session, settings, NOW, sales)
+    assert (await load_rates(session, watch.market_id))["jah"] == SEED_RATES["jah"]
 
 
 async def test_rates_are_also_measured_where_fg_prices_need_them(session, settings):
@@ -179,7 +247,15 @@ async def test_rates_are_also_measured_where_fg_prices_need_them(session, settin
     pages = {"/api/diablo2resurrected/listings": (200, {"listings": []})}
     await collector.refresh_rates(session, settings, NOW, transport(pages, seen))
     calls = [parse_qs(r.url.query.decode()) for r in seen if r.url.path.endswith("/listings")]
-    assert {c["prop_Mode"][0] for c in calls} == {"hardcore"}
+    assert {c["prop_Mode"][0] for c in calls} == {"hardcore", "softcore"}
+
+
+async def test_the_default_market_is_measured_before_anything_is_watched(session, settings):
+    settings.traderie_enabled = True
+    sales = rune_sales({"jah": [sold_for_ist(n, 40) for n in range(6)]})
+    await collector.refresh_rates(session, settings, NOW, sales)
+    default = await get_or_create_market(session, MarketKey())
+    assert (await load_rates(session, default.id))["jah"] == pytest.approx(40, rel=0.05)
 
 
 def test_a_shuffled_list_has_the_same_things_in_it():
