@@ -13,6 +13,8 @@ from d2_trader.services.pricing import store_listings
 from d2_trader.services.rune_values import (
     CHEAPEST,
     HISTORY_DAYS,
+    Ask,
+    RuneAsks,
     active_asks,
     fit_market,
     model_floor,
@@ -151,6 +153,8 @@ def test_asks_are_ranked_cheapest_first_per_rune():
     ranked = rank_asks(rows, RATES)
     assert [a.value for a in ranked["lo"].cheapest] == [4.5, 5.0, 6.0]
     assert [a.value for a in ranked["ber"].cheapest] == [14.0]
+    assert isinstance(ranked["lo"], RuneAsks)
+    assert all(isinstance(a, Ask) for a in ranked["lo"].cheapest)
 
 
 def test_only_the_cheapest_ten_are_kept():

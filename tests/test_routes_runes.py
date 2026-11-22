@@ -17,6 +17,7 @@ from d2_trader.sources.types import ParsedListing
 from d2_trader.web import routes_runes
 from d2_trader.web.routes_runes import (
     CHARTED,
+    RunePanel,
     market_query,
     panels,
     runes_page,
@@ -49,6 +50,7 @@ def test_every_charted_rune_gets_a_panel_valued_in_ber_too():
     fit = fit_runes(trades, SEED_RATES, until=start + timedelta(days=2))
     found = panels(fit, [], utcnow())
     assert [p.rune for p in found] == CHARTED
+    assert all(isinstance(p, RunePanel) and p.asks is None for p in found)
     ber = next(p for p in found if p.rune == "ber")
     assert ber.ber == ber.today.value and ber.direct == 3 and ber.chart is not None
 

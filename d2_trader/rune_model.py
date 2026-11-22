@@ -253,22 +253,37 @@ def _fit_cached(
         by_day.setdefault(trade.day, []).append(trade)
     prior = np.array([math.log(seeds[r]) for r in STATE_RUNES])
 
-    runs = [(c, _filter(by_day, days, prior, c, breaks)) for c in grid()]
-    weights = weigh([run[2] for _, run in runs])
-    mean = np.zeros((len(days), len(STATE_RUNES)))
+    runs = [_filter(by_day, days, prior, c, breaks) for c in grid()]
+    mean, spread = _blend(runs, len(days))
+    paths = _paths(days, by_day, mean, spread)
+    return RuneFit(paths, _direct(kept), len(kept), _observed(kept, paths, first))
+
+
+def _blend(runs, n_days: int) -> tuple[np.ndarray, np.ndarray]:
+    """The likelihood-weighted mean and spread of every grid run's smoothed states."""
+    weights = weigh([run[2] for run in runs])
+    mean = np.zeros((n_days, len(STATE_RUNES)))
     second = np.zeros_like(mean)
-    for weight, (_, (filtered, predicted, _)) in zip(weights, runs, strict=True):
+    for weight, (filtered, predicted, _) in zip(weights, runs, strict=True):
         if not weight:
             continue
         for i, (x, cov) in enumerate(_smooth(filtered, predicted)):
             mean[i] += weight * x
             second[i] += weight * (np.clip(np.diag(cov), 0, None) + x**2)
-    spread = np.sqrt(np.clip(second - mean**2, 0, None))
+    return mean, np.sqrt(np.clip(second - mean**2, 0, None))
 
+
+def _direct(kept: Sequence[Trade]) -> dict[str, int]:
+    """How many trades name each rune."""
     direct = {r: 0 for r in RUNES}
     for trade in kept:
         for rune in trade.involves():
             direct[rune] += 1
+    return direct
+
+
+def _paths(days, by_day, mean: np.ndarray, spread: np.ndarray) -> dict[str, list[PathPoint]]:
+    """Each rune's daily value and 95% interval in Ist; Ist itself is 1 throughout."""
     paths = {BASE_CURRENCY: [PathPoint(d, 1.0, 1.0, 1.0, len(by_day.get(d, ()))) for d in days]}
     for j, rune in enumerate(STATE_RUNES):
         paths[rune] = [
@@ -281,6 +296,11 @@ def _fit_cached(
             )
             for i, d in enumerate(days)
         ]
+    return paths
+
+
+def _observed(kept, paths, first: date) -> dict[str, list[tuple[date, float]]]:
+    """Each trade's implied Ist value for every non-Ist rune in it, at that day's values."""
     observed: dict[str, list[tuple[date, float]]] = {r: [] for r in RUNES}
     for trade in kept:
         values = {r: paths[r][(trade.day - first).days].value for r in trade.involves()}
@@ -288,4 +308,4 @@ def _fit_cached(
             implied = implied_value(trade, rune, values)
             if implied is not None:
                 observed[rune].append((trade.day, implied))
-    return RuneFit(paths, direct, len(kept), observed)
+    return observed

@@ -22,6 +22,7 @@ dependency::pyproject.toml::httpx = 1
 dependency::pyproject.toml::jinja2 = 1
 dependency::pyproject.toml::markupsafe = 1
 dependency::pyproject.toml::mypy = 1
+dependency::pyproject.toml::numpy = 1
 dependency::pyproject.toml::pre-commit = 1
 dependency::pyproject.toml::psycopg = 1
 dependency::pyproject.toml::pydantic = 1

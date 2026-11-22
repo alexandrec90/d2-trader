@@ -216,6 +216,18 @@ async def test_each_runes_sales_and_open_asks_are_fetched_once(session, settings
     assert sorted(seen) == sorted((i, k) for i in RUNE_ITEM_IDS.values() for k in RUNE_KINDS)
 
 
+async def test_collect_rune_listings_stores_one_markets_sales_and_asks(session, settings):
+    found = rune_listings(
+        {"jah": [sold_for_ist(n, 40) for n in range(3)]},
+        {"ber": [sold_for_ist(n + 10, 20) for n in range(2)]},
+    )
+    async with collector._client(settings, 0, found) as client:
+        stored = await collector.collect_rune_listings(session, client, MarketKey(), NOW)
+    assert stored == 5
+    kinds = sorted((await session.execute(select(Listing.kind))).scalars().all())
+    assert kinds == ["ask", "ask", "sold", "sold", "sold"]
+
+
 async def test_rune_asks_are_kept_but_never_value_a_rune(session, settings):
     """An ask is not a trade: ten silly asks leave Jah at its seed."""
     settings.traderie_enabled = True
