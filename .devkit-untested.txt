@@ -40,10 +40,12 @@ scripts/lint-all.py::mypy_batches
 scripts/lint-all.py::mypy_scope
 scripts/lint-all.py::not_clean_reason
 scripts/lint-all.py::nothing_to_do
+scripts/lint-all.py::pinned_sdk
 scripts/lint-all.py::python_targets
 scripts/lint-all.py::rerun_in_tree_venv
 scripts/lint-all.py::run_tool
 scripts/lint-all.py::scope_unknown
+scripts/lint-all.py::sdk_listed
 scripts/lint-all.py::secrets_section
 scripts/lint-all.py::secrets_targets
 scripts/lint-all.py::vendored
