@@ -19,6 +19,7 @@ dependencies = [
   # The collectors: HTTP, and reading the HTML two of the sources only offer as pages.
   "httpx>=0.27",
   "beautifulsoup4>=4.12",
+  "numpy>=2.1",
 ]
 
 [project.optional-dependencies]

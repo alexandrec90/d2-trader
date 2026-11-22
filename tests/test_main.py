@@ -22,6 +22,29 @@ def test_run_accepts_each_job():
         assert cli.build_parser().parse_args(["run", job]).job == job
 
 
+def test_rune_value_defaults_to_softcore_ladder_rotw():
+    args = cli.build_parser().parse_args(["rune-value", "Lo"])
+    assert args.rune == "lo"
+    assert cli.market_from(args) == cli.MarketKey("PC", "softcore", True, "rotw")
+
+
+def test_rune_value_reads_every_market_dimension():
+    argv = ["rune-value", "ber", "--mode", "hardcore", "--non-ladder", "--version", "lod"]
+    args = cli.build_parser().parse_args(argv)
+    assert cli.market_from(args) == cli.MarketKey("PC", "hardcore", False, "lod")
+
+
+def test_rune_value_refuses_what_is_not_a_rune():
+    with pytest.raises(SystemExit):
+        cli.build_parser().parse_args(["rune-value", "enigma"])
+
+
+def test_rune_value_prints_the_report(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "run_async", lambda coroutine: coroutine.close() or ["Lo: 9 Ist"])
+    assert cli.main(["rune-value", "lo"]) == 0
+    assert "Lo: 9 Ist" in capsys.readouterr().out
+
+
 def fake_run(status):
     class Run:
         job, records, detail = "x", 0, None

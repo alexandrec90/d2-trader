@@ -98,16 +98,6 @@ def parse_listings(payload: dict, market: MarketKey, kind: str) -> list[ParsedLi
     return parsed
 
 
-def rune_quotes(listings: list[ParsedListing]) -> list[tuple[str, float]]:
-    """What a rune fetched per unit, from sales paid in exactly one kind of thing."""
-    quotes = []
-    for listing in listings:
-        if len(listing.alternatives) == 1 and len(listing.alternatives[0]) == 1:
-            currency, quantity = listing.alternatives[0][0]
-            quotes.append((currency, quantity / listing.quantity))
-    return quotes
-
-
 async def find_item_id(client: PoliteClient, name: str) -> str | None:
     """Traderie's id for an item, on an exact name match only.
 

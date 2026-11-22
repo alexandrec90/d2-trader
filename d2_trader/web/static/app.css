@@ -209,6 +209,15 @@ dl.plain dd { margin: 0; color: var(--ink-2); }
 }
 .tooltip b { display: block; margin-bottom: 2px; }
 
+/* Rune values: small multiples, each on its own axis, since runes span 0.3 to 30 Ist. */
+.rune-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); margin-bottom: 16px; }
+.rune-card h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; }
+.rune-value { font-variant-numeric: tabular-nums; }
+.rune-card p { margin: 0; }
+.asks td:not(:first-child), .asks th { white-space: nowrap; }
+.market-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+.market-picker [aria-current] { font-weight: 600; color: var(--ink); text-decoration: none; }
+
 @media (width <= 560px) {
   .grid .wide { grid-column: 1 / -1; }
   .season dl { gap: 16px; }

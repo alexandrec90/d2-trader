@@ -16,7 +16,6 @@ from d2_trader.sources.traderie import (
     in_market,
     listing_params,
     parse_listings,
-    rune_quotes,
 )
 
 MARKET = MarketKey("PC", "softcore", True, "rotw")
@@ -110,20 +109,6 @@ def test_zero_amount_is_read_as_one():
 def test_empty_payloads_parse_to_nothing():
     assert parse_listings({}, MARKET, "ask") == []
     assert parse_listings({"listings": None}, MARKET, "ask") == []
-
-
-def test_rune_quotes_are_per_unit_and_skip_mixed_payment():
-    listings = parse_listings(
-        {
-            "listings": [
-                raw_listing(id="a", amount=3, prices=[price("Ist Rune", 1)]),
-                raw_listing(id="b", prices=[price("Ist Rune", 1), price("Vex Rune", 1, 1)]),
-            ]
-        },
-        MARKET,
-        "sold",
-    )
-    assert rune_quotes(listings) == [("ist", 1 / 3)]
 
 
 def test_rune_ids_cover_the_runes_that_carry_trades():

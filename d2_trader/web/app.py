@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from d2_trader.config import Settings, get_settings
 from d2_trader.db import Sessions, make_engine, make_sessions
 from d2_trader.services.calendar import ensure_seed_seasons
-from d2_trader.web import routes_admin, routes_watch
+from d2_trader.web import routes_admin, routes_runes, routes_watch
 
 HERE = Path(__file__).parent
 
@@ -31,4 +31,5 @@ def create_app(sessions: Sessions | None = None, settings: Settings | None = Non
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     app.include_router(routes_watch.router)
     app.include_router(routes_admin.router)
+    app.include_router(routes_runes.router)
     return app

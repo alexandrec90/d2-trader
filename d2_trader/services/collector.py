@@ -8,16 +8,16 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from d2_trader.config import Settings
-from d2_trader.currency import derive_rates
 from d2_trader.markets import MarketKey
 from d2_trader.models import Item, WatchItem
 from d2_trader.seasons import season_events
 from d2_trader.services.calendar import apply_date, find_disagreements, load_seasons
-from d2_trader.services.catalog import market_key, upsert_catalog
+from d2_trader.services.catalog import get_or_create_market, market_key, upsert_catalog
 from d2_trader.services.fg_rates import fg_markets
 from d2_trader.services.notify import Message, deliver
 from d2_trader.services.pricing import store_listings
-from d2_trader.services.rates import load_rates, store_derived_rates
+from d2_trader.services.rates import store_derived_rates
+from d2_trader.services.rune_values import fit_market, rune_item
 from d2_trader.services.watch import enabled_watches
 from d2_trader.sources import blizzard, diablo2io, traderie
 from d2_trader.sources.http import Pace, PoliteClient, RobotsDenied, SourceBlocked
@@ -101,34 +101,47 @@ async def collect_traderie(
     return stored
 
 
-async def _rune_quotes(
-    client: PoliteClient, market: MarketKey
-) -> dict[str, list[tuple[str, float]]]:
-    quotes: dict[str, list[tuple[str, float]]] = {}
-    for rune, remote_id in shuffled(list(traderie.RUNE_ITEM_IDS.items())):
-        sales = await traderie.fetch_listings(client, remote_id, market, "sold")
-        quotes[rune] = traderie.rune_quotes(sales)
-    return quotes
+RUNE_KINDS = ("sold", "ask")
+
+
+async def collect_rune_listings(
+    session: AsyncSession, client: PoliteClient, market: MarketKey, now: datetime
+) -> int:
+    """Store a market's latest sales of every rune Traderie lists by id, and its open asks.
+
+    Sales feed the rune model; asks are the cheapest listings the Runes page shows.
+    """
+    stored = 0
+    pairs = [(r, i, kind) for r, i in traderie.RUNE_ITEM_IDS.items() for kind in RUNE_KINDS]
+    for rune, remote_id, kind in shuffled(pairs):
+        item = await rune_item(session, rune, remote_id)
+        listings = await traderie.fetch_listings(client, remote_id, market, kind)
+        stored += await store_listings(session, item.id, listings, now)
+    return stored
 
 
 async def refresh_rates(
     session: AsyncSession, settings: Settings, now: datetime, transport=None
 ) -> int:
-    """Re-measure rune values from rune-for-rune trades.
+    """Collect rune trades and asks, then re-fit every rune's value from all the trades.
 
-    For every watched market, and every market with rune prices in fg, since the fg rate
-    is measured against these values.
+    For the dashboard's default market, so rune values exist before anything is watched;
+    every watched market; and every market with rune prices in fg, since the fg rate is
+    measured against these values. See `rune_model.py` for how.
     """
     if not settings.traderie_enabled:
         raise SourceDisabled("off: rates come from Traderie trades (see README)")
-    markets = {w.market_id: market_key(w.market) for w in await enabled_watches(session)}
+    default = await get_or_create_market(session, MarketKey())
+    markets = {default.id: MarketKey()}
+    markets |= {w.market_id: market_key(w.market) for w in await enabled_watches(session)}
     markets |= dict(await fg_markets(session, now))
+    seasons = await load_seasons(session)
     stored = 0
     async with _client(settings, settings.traderie_min_interval_s, transport) as client:
         for market_id, market in markets.items():
-            quotes = await _rune_quotes(client, market)
-            rates, samples = derive_rates(quotes, await load_rates(session, market_id))
-            stored += await store_derived_rates(session, market_id, rates, samples)
+            await collect_rune_listings(session, client, market, now)
+            fit = await fit_market(session, market, seasons, now)
+            stored += await store_derived_rates(session, market_id, fit.today(), fit.direct)
     return stored
 
 

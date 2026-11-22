@@ -130,10 +130,33 @@ season ends, when it ends, a day before the next starts, and when it starts.
 
 D2R has no money, so every price is valued in **Ist runes**. A listing may offer
 alternatives ("Ber or 2 Lo"): a seller is held to the cheapest, a buyer to the best. A
-lot is divided per item. Rune rates start from values measured on 2026-11-06, are
-re-measured per market every 12 hours from Traderie's rune-for-rune trades, and can be
-overridden on the Rates page. Forum gold is measured, as above. A listing paid in
-something with no rate is left out rather than guessed.
+lot is divided per item. A listing paid in something with no rate is left out rather
+than guessed, and any rate can be overridden on the Rates page.
+
+**Rune values** come from one model per market (`rune_model.py`). Every 12 hours the
+collector stores each rune's latest completed sales on Traderie, then fits every rune's
+value in Ist at once from every rune-for-rune trade since the season began:
+
+- No rune trade states a value in Ist; each relates two runes. So a Lo value is read off
+  the whole web: Lo for Ohm, Ber for Lo, and Ohm for Ist, which never names Lo, all count.
+  A mixed payment ("Lo + 4 Ist") is valued as the sum it is.
+- Each value is a random walk, so last week's trades still inform today, less than
+  today's do; and runes partly move together, because Ist, the unit, moves too.
+- As for item prices: outliers are down-weighted, quiet days widen the interval, a reset
+  lets every value jump, and the noise levels are fitted, not assumed. A rune named in
+  fewer than 5 trades keeps its seed (measured 2026-11-06).
+
+The **Runes** page charts every traded rune's value over time, one small chart each on
+its own axis (runes span 0.3 to 30 Ist): the model's line and 95% band, and a dot for
+each day's median trade, its other side valued at the model's estimate for that day.
+Under each chart are the rune's 10 cheapest open asks, per rune at their cheapest
+alternative, with how far each sits from the estimate; bait prices are hidden and counted.
+The rates job fetches them with the trades, so they are as fresh as its last run.
+`python -m d2_trader rune-value lo` prints one rune's value today with its 95% interval
+and its last two weeks (`--mode`, `--non-ladder`, `--version` pick the market). Checked on
+simulated rune markets (`tests/test_rune_model.py`), the interval held the true value on
+93% of days with clean trades and 89% with one trade in twenty a bait price. Forum gold
+is measured against these values, as above.
 
 **The estimated price** (and the forum gold rate) come from one model, in `trend.py`.
 Prices are not independent from day to day: today's is yesterday's plus a step, and the
@@ -194,6 +217,7 @@ d2_trader/               application code
   seasons.py             the reset calendar, phases and price windows (pure)
   stats.py alerts.py     price ranges and alert decisions (pure)
   currency.py markets.py valuing prices in Ist, and what a market is (pure)
+  trend.py rune_model.py one price over time; every rune's value at once (pure)
   sources/               one module per external site; http.py is the only HTTP path
   services/              everything that combines the database with the above
   web/                   the dashboard
