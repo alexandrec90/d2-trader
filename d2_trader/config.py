@@ -32,7 +32,9 @@ class Settings(BaseSettings):
     diablo2io_poll_hours: int = 24
     season_poll_hours: int = 6
     catalog_poll_days: int = 7
-    rates_poll_hours: int = 12
+    # Rune trades and the rune asks the Runes page lists. Hourly by the operator's choice
+    # (2026-11-23): a cheap ask sells within minutes, so one fetched 12 hours ago is gone.
+    rates_poll_hours: int = 1
 
     # How long an ask stays live after a collector last saw it.
     ask_stale_hours: int = 6

@@ -15,6 +15,7 @@ from d2_trader.sources.traderie import (
     find_item_id,
     in_market,
     listing_params,
+    listing_url,
     parse_listings,
 )
 
@@ -67,6 +68,12 @@ def test_parse_reads_a_listing():
     assert listing.quantity == 1
     assert listing.observed_at.year == 2026
     assert listing.attrs == {"rarity": "superior"}
+
+
+def test_a_listing_links_to_its_own_page_not_the_items():
+    [listing] = parse_listings({"listings": [raw_listing()]}, MARKET, "ask")
+    assert listing.url == "https://traderie.com/diablo2resurrected/listing/1002479569827"
+    assert listing.url == listing_url(listing.external_id)
 
 
 def test_groups_are_alternatives_and_lots_within_a_group_are_bundled():

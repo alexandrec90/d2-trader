@@ -133,7 +133,7 @@ alternatives ("Ber or 2 Lo"): a seller is held to the cheapest, a buyer to the b
 lot is divided per item. A listing paid in something with no rate is left out rather
 than guessed, and any rate can be overridden on the Rates page.
 
-**Rune values** come from one model per market (`rune_model.py`). Every 12 hours the
+**Rune values** come from one model per market (`rune_model.py`). Every hour (`RATES_POLL_HOURS`) the
 collector stores each rune's latest completed sales on Traderie, then fits every rune's
 value in Ist at once from every rune-for-rune trade since the season began:
 

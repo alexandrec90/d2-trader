@@ -45,6 +45,11 @@ class RunePanel:
     asks: RuneAsks | None = None
 
 
+def hours_label(hours: int) -> str:
+    """A poll interval as the page says it: "every hour", "every 12 hours"."""
+    return "hour" if hours == 1 else f"{hours} hours"
+
+
 def market_query(market: MarketKey) -> str:
     ladder = "true" if market.ladder else "false"
     return (
@@ -119,5 +124,5 @@ async def runes_page(
         markets=[(m, market_query(m)) for m in markets],
         panels=panels(fit, seasons, now, asks),
         trades=fit.trades,
-        every=every,
+        every=hours_label(every),
     )

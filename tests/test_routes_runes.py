@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from d2_trader.config import Settings
 from d2_trader.currency import SEED_RATES
 from d2_trader.markets import MarketKey
 from d2_trader.models import CurrencyRate, utcnow
@@ -18,6 +19,7 @@ from d2_trader.web import routes_runes
 from d2_trader.web.routes_runes import (
     CHARTED,
     RunePanel,
+    hours_label,
     market_query,
     panels,
     runes_page,
@@ -93,7 +95,21 @@ async def test_the_page_lists_each_runes_cheapest_open_asks(client, sessions):
     table = page[page.index('<table class="asks">') : page.index("</table>")]
     assert re.findall(r"<td>([\d.]+ Ist)</td>", table) == ["6 Ist", "6.5 Ist", "7 Ist"]
     assert "+8%" in page  # 6.5 Ist against a Lo estimated at 6.
-    assert page.count("No open asks seen in the last 12 hours") == len(CHARTED) - 1
+    assert page.count("No open asks seen in the last hour.") == len(CHARTED) - 1
+    assert "fetched with the trades every hour," in page
+
+
+def test_a_poll_interval_reads_as_a_span():
+    assert hours_label(1) == "hour"
+    assert hours_label(12) == "12 hours"
+
+
+async def test_the_empty_page_states_the_configured_interval(client):
+    assert "collects them every hour;" in (await client.get("/runes")).text
+
+
+def test_rune_trades_and_asks_are_fetched_hourly_unless_configured():
+    assert Settings(database_url="postgresql://x").rates_poll_hours == 1
 
 
 async def test_asks_are_valued_at_the_model_unless_a_rate_is_pinned(session):
