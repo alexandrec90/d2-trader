@@ -15,7 +15,7 @@ from d2_trader.sources.types import ParsedListing
 
 SOURCE = "traderie"
 API = "https://traderie.com/api/diablo2resurrected"
-SITE = "https://traderie.com/diablo2resurrected/product"
+SITE = "https://traderie.com/diablo2resurrected"
 KIND_PARAMS = {"ask": {}, "bid": {"selling": "false"}, "sold": {"completed": "true"}}
 # Stable ids, listed so measuring rates does not cost a search per rune per market.
 RUNE_ITEM_IDS = {
@@ -33,6 +33,15 @@ RUNE_ITEM_IDS = {
     "cham": "3191411278",
     "zod": "4067651730",
 }
+
+
+def listing_url(listing_id: str) -> str:
+    """A listing's own page. The item's page says nothing about one listing.
+
+    The operator confirmed this shape in a browser on 2026-11-23. A listing that has been
+    taken down has no page any more, so a link to an old one can still be dead.
+    """
+    return f"{SITE}/listing/{listing_id}"
 
 
 def listing_params(item_id: str, market: MarketKey, kind: str) -> dict[str, str]:
@@ -91,7 +100,7 @@ def parse_listings(payload: dict, market: MarketKey, kind: str) -> list[ParsedLi
                 observed_at=datetime.fromisoformat(raw["updated_at"].replace("Z", "+00:00")),
                 quantity=max(int(raw.get("amount") or 1), 1),
                 ethereal=bool(props.get("Ethereal")),
-                url=f"{SITE}/{raw['item_id']}",
+                url=listing_url(str(raw["id"])),
                 attrs={"rarity": props.get("Rarity")},
             )
         )
