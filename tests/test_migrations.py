@@ -1,3 +1,7 @@
+import os
+import subprocess
+import sys
+
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
@@ -17,6 +21,18 @@ def test_migrations_build_exactly_what_the_models_describe(database_url):
         context = MigrationContext.configure(connection)
         assert compare_metadata(context, Base.metadata) == []
     engine.dispose()
+
+
+def test_an_upgrade_logs_each_migration_it_runs():
+    """The stack's `migrate` log was empty on success. `--sql` connects to nothing, so
+    this needs no database."""
+    env = {**os.environ, "DATABASE_URL": "postgresql+psycopg://127.0.0.1:1/none"}
+    argv = [sys.executable, "-m", "alembic", "upgrade", "head", "--sql"]
+    done = subprocess.run(  # noqa: S603 - this interpreter, fixed arguments
+        argv, env=env, capture_output=True, text=True, timeout=120
+    )
+    assert done.returncode == 0, done.stderr
+    assert "Running upgrade" in done.stderr
 
 
 async def test_the_link_backfill_points_traderie_rows_at_their_own_listing(session):
