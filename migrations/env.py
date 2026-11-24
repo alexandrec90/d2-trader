@@ -5,6 +5,7 @@ database on its own host port, so a committed URL would be wrong for all but one
 """
 
 import os
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -12,6 +13,12 @@ from sqlalchemy import engine_from_config, pool
 from d2_trader.models import Base
 
 config = context.config
+
+# `alembic.ini`'s loggers print a "Running upgrade" line per migration; unread, a run that
+# migrated and one that did nothing both log nothing. Existing loggers stay on because the
+# test suite runs this in its own process.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # `alembic revision --autogenerate` compares this with the database to write a revision.
 target_metadata = Base.metadata
