@@ -1,0 +1,20 @@
+# PR #16 (Traderie listing links, hourly rune rates) changes the app and adds a migration.
+# The running stack keeps the old code until it is rebuilt, and the session that wrote #16
+# ended by handing that rebuild to the operator (devkit ledger 136a6b8b). Queued instead.
+when = "pr:d2-trader#16"
+on = "DESKTOP-ML5F3PJ"
+agent = """
+Rebuild the running d2-trader Docker stack on this machine so it runs the code PR #16
+merged (Traderie rows link to their own listing; rune trades and asks fetched hourly).
+#16 also adds a database migration, which the stack's `migrate` service applies.
+
+Steps:
+1. Run `docker ps` first; a daemon error means Docker Desktop is stopped: start it.
+2. Fast-forward the main checkout of this project to origin's default branch, which
+   must now hold #16's merge commit; if it does not, stop and report.
+3. From the checkout: `docker compose up -d --build`. The project name is unchanged, so
+   this recreates the same containers on the same volume: no data is lost.
+4. Done when `docker compose ps` shows app and worker running with the new image,
+   `docker compose logs migrate` shows the migration applied without error, and
+   http://127.0.0.1:8010/runes answers 200.
+"""
