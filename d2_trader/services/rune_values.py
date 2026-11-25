@@ -7,7 +7,7 @@ re-reads all of them.
 This reads `listings` directly rather than through `market_view`, because it needs every
 rune at once and not one item's summary. It keeps the same boundary: a ladder market reads
 nothing from before its season began, and a non-ladder one nothing from before the last
-transfer (or `HISTORY_DAYS`, if none is known). Asks are read only while a collector
+transfer (or `HISTORY_DAYS`, if none is known). Asks and bids are read only while a collector
 still sees them up, so none from an earlier season can appear either.
 """
 
@@ -18,7 +18,14 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from d2_trader.currency import SEED_RATES, normalize_currency, unit_value
+from d2_trader.currency import (
+    RUNES,
+    SEED_RATES,
+    Alternative,
+    alternative_value,
+    normalize_currency,
+    unit_value,
+)
 from d2_trader.markets import MarketKey
 from d2_trader.models import CurrencyRate, Item, Listing, Market
 from d2_trader.rune_model import RuneFit, Trade, fit_runes, trade_from
@@ -87,8 +94,12 @@ async def fit_market(
 
 @dataclass(frozen=True)
 class Ask:
+    """One way to get a rune: somebody has it, or wants another rune and pays in it."""
+
     listing: Listing
     value: float  # Ist per rune, at today's rune values.
+    wanted: str | None = None  # For a bid, the rune its poster wants...
+    offered: Alternative | None = None  # ...and what they pay, this rune included.
 
 
 @dataclass(frozen=True)
@@ -98,10 +109,36 @@ class RuneAsks:
     seen_at: datetime | None  # When a collector last saw the freshest of them.
 
 
+def bid_offers(wanted: str, listing: Listing, rates: Mapping[str, float]) -> list[tuple[str, Ask]]:
+    """A bid from the other side: "wants 2 Ist, has 5 Um" sells Um at 0.4 Ist each.
+
+    Each alternative is its own offer, since whoever fills the bid picks one. A bundle is
+    listed under its most valuable rune, its cost split in proportion to value, so that
+    rune shows the whole bundle's discount. One holding anything but runes is left out,
+    as too roughly valued, and so is one paying in the rune it wants.
+    """
+    cost = alternative_value([(wanted, max(listing.quantity, 1))], rates)
+    if not cost:
+        return []
+    cheapest: dict[str, Ask] = {}
+    for alternative in listing.alternatives:
+        lots = [(str(c), float(q)) for c, q in alternative]
+        if any(c not in RUNES or c == wanted or q <= 0 for c, q in lots):
+            continue
+        worth = alternative_value(lots, rates)
+        if not worth:
+            continue
+        main = max(lots, key=lambda lot: lot[1] * rates[lot[0]])[0]
+        offer = Ask(listing, rates[main] * cost / worth, wanted, lots)
+        if main not in cheapest or offer.value < cheapest[main].value:
+            cheapest[main] = offer
+    return list(cheapest.items())
+
+
 def rank_asks(
     rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float], limit: int = CHEAPEST
 ) -> dict[str, RuneAsks]:
-    """Each rune's cheapest asks per rune, cheapest first, bait left out.
+    """Each rune's cheapest offers per rune, from asks and bids alike, bait left out.
 
     A seller takes whichever alternative is offered, so an ask is worth its cheapest. A
     bait price ("Zod for 1 El") would top every list, so asks far from the rest of the
@@ -109,6 +146,10 @@ def rank_asks(
     """
     by_rune: dict[str, list[Ask]] = {}
     for name, listing in rows:
+        if listing.kind == "bid":
+            for rune, offer in bid_offers(normalize_currency(name), listing, rates):
+                by_rune.setdefault(rune, []).append(offer)
+            continue
         value = unit_value(listing.alternatives, rates, "ask", listing.quantity)
         if value is not None and value > 0:
             by_rune.setdefault(normalize_currency(name), []).append(Ask(listing, value))
@@ -124,14 +165,14 @@ def rank_asks(
 async def active_asks(
     session: AsyncSession, market: MarketKey, seen_since: datetime
 ) -> list[tuple[str, Listing]]:
-    """Every rune ask a collector has seen still up since `seen_since`."""
+    """Every rune ask and bid a collector has seen still up since `seen_since`."""
     query = (
         select(Item.name, Listing)
         .join(Item, Item.id == Listing.item_id)
         .where(
             func.lower(Item.name).in_(rune_item_names()),
             Listing.market_id.in_(await comparable_market_ids(session, market)),
-            Listing.kind == "ask",
+            Listing.kind.in_(("ask", "bid")),
             Listing.last_seen_at >= seen_since,
         )
     )

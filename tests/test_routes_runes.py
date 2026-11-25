@@ -91,12 +91,27 @@ async def test_the_page_lists_each_runes_cheapest_open_asks(client, sessions):
         await store_listings(session, lo.id, asks + sold, now)
         await session.commit()
     page = (await client.get("/runes")).text
-    assert "Cheapest 3 asks" in page
+    assert "Cheapest 3 offers" in page
     table = page[page.index('<table class="asks">') : page.index("</table>")]
     assert re.findall(r"<td>([\d.]+ Ist)</td>", table) == ["6 Ist", "6.5 Ist", "7 Ist"]
     assert "+8%" in page  # 6.5 Ist against a Lo estimated at 6.
-    assert page.count("No open asks seen in the last hour.") == len(CHARTED) - 1
+    assert page.count("No open offers seen in the last hour.") == len(CHARTED) - 1
     assert "fetched with the trades every hour," in page
+
+
+async def test_the_page_lists_what_people_who_want_another_rune_pay(client, sessions):
+    now = utcnow()
+    bid = ParsedListing("traderie", "b", "bid", MarketKey(), [[("lo", 1.0)]], now, quantity=5)
+    sold = ParsedListing("traderie", "s", "sold", MarketKey(), [[("ist", 6.0)]], now)
+    async with sessions() as session:
+        ist, lo = await rune_item(session, "ist"), await rune_item(session, "lo")
+        await store_listings(session, ist.id, [bid], now)
+        await store_listings(session, lo.id, [sold], now)
+        await session.commit()
+    page = (await client.get("/runes")).text
+    assert "Cheapest 1 offers" in page
+    assert re.search(r"<td>5 Ist for 1 Lo <span", page)
+    assert "they want" in page
 
 
 def test_a_poll_interval_reads_as_a_span():

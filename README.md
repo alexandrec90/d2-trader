@@ -130,7 +130,8 @@ season ends, when it ends, a day before the next starts, and when it starts.
 
 D2R has no money, so every price is valued in **Ist runes**. A listing may offer
 alternatives ("Ber or 2 Lo"): a seller is held to the cheapest, a buyer to the best. A
-lot is divided per item. A listing paid in something with no rate is left out rather
+lot is divided per item; a Traderie listing marked as stock is priced each, however many
+the seller has. A listing paid in something with no rate is left out rather
 than guessed, and any rate can be overridden on the Rates page.
 
 **Rune values** come from one model per market (`rune_model.py`). Every hour (`RATES_POLL_HOURS`) the
@@ -149,8 +150,11 @@ value in Ist at once from every rune-for-rune trade since the season began:
 The **Runes** page charts every traded rune's value over time, one small chart each on
 its own axis (runes span 0.3 to 30 Ist): the model's line and 95% band, and a dot for
 each day's median trade, its other side valued at the model's estimate for that day.
-Under each chart are the rune's 10 cheapest open asks, per rune at their cheapest
-alternative, with how far each sits from the estimate; bait prices are hidden and counted.
+Under each chart are the rune's 10 cheapest open offers, with how far each sits from the
+estimate; bait prices are hidden and counted. An offer is somebody who has the rune, at
+their cheapest alternative, or somebody who wants another rune and pays in this one
+("wants 2 Ist, has 5 Um" sells Um at 0.4 Ist). A bundle of runes is listed under its
+most valuable one, at the bundle's discount; a bid paid in anything else is left out.
 The rates job fetches them with the trades, so they are as fresh as its last run.
 `python -m d2_trader rune-value lo` prints one rune's value today with its 95% interval
 and its last two weeks (`--mode`, `--non-ladder`, `--version` pick the market). Checked on
