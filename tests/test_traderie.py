@@ -9,6 +9,7 @@ import httpx
 from d2_trader.markets import MarketKey
 from d2_trader.sources.http import Pace, PoliteClient
 from d2_trader.sources.traderie import (
+    lot_size,
     RUNE_ITEM_IDS,
     alternatives_from,
     fetch_listings,
@@ -164,3 +165,9 @@ async def test_fetch_listings_parses_the_response():
     async with client({"listings": [raw_listing()]}) as api:
         [listing] = await fetch_listings(api, "1", MARKET, "sold")
     assert listing.kind == "sold"
+
+
+def test_lot_size_is_one_where_the_price_is_per_item():
+    assert lot_size({"amount": 2, "stock": True}) == 1
+    assert lot_size({"amount": 3}) == 3
+    assert lot_size({"amount": 0}) == 1
