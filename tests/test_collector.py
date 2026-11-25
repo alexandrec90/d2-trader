@@ -166,11 +166,11 @@ def rune_sales(sold: dict[str, list[dict]]):
     return rune_listings(sold, {})
 
 
-def rune_listings(sold: dict[str, list[dict]], asks: dict[str, list[dict]], seen=None):
+def rune_listings(sold: dict[str, list[dict]], asks: dict[str, list[dict]], seen=None, bids=None):
     """Traderie answering each rune's sales and open asks, and recording what was asked."""
     by_kind = {
         kind: {RUNE_ITEM_IDS[rune]: rows for rune, rows in found.items()}
-        for kind, found in (("sold", sold), ("ask", asks))
+        for kind, found in (("sold", sold), ("ask", asks), ("bid", bids or {}))
     }
 
     def handler(request):
@@ -178,6 +178,7 @@ def rune_listings(sold: dict[str, list[dict]], asks: dict[str, list[dict]], seen
             return httpx.Response(200, text="User-agent: *\nDisallow:\n")
         query = parse_qs(request.url.query.decode())
         kind = "sold" if query.get("completed") == ["true"] else "ask"
+        kind = "bid" if query.get("selling") == ["false"] else kind
         if seen is not None:
             seen.append((query["item"][0], kind))
         return httpx.Response(200, json={"listings": by_kind[kind].get(query["item"][0], [])})
@@ -209,23 +210,24 @@ async def test_rune_sales_are_kept_under_the_rune(session, settings, watch):
     assert (await load_rates(session, watch.market_id))["jah"] == pytest.approx(40, rel=0.05)
 
 
-async def test_each_runes_sales_and_open_asks_are_fetched_once(session, settings):
+async def test_each_runes_sales_asks_and_bids_are_fetched_once(session, settings):
     settings.traderie_enabled = True
     seen = []
     await collector.refresh_rates(session, settings, NOW, rune_listings({}, {}, seen))
     assert sorted(seen) == sorted((i, k) for i in RUNE_ITEM_IDS.values() for k in RUNE_KINDS)
 
 
-async def test_collect_rune_listings_stores_one_markets_sales_and_asks(session, settings):
+async def test_collect_rune_listings_stores_one_markets_listings(session, settings):
     found = rune_listings(
         {"jah": [sold_for_ist(n, 40) for n in range(3)]},
         {"ber": [sold_for_ist(n + 10, 20) for n in range(2)]},
+        bids={"ber": [sold_for_ist(20, 12)]},
     )
     async with collector._client(settings, 0, found) as client:
         stored = await collector.collect_rune_listings(session, client, MarketKey(), NOW)
-    assert stored == 5
+    assert stored == 6
     kinds = sorted((await session.execute(select(Listing.kind))).scalars().all())
-    assert kinds == ["ask", "ask", "sold", "sold", "sold"]
+    assert kinds == ["ask", "ask", "bid", "sold", "sold", "sold"]
 
 
 async def test_rune_asks_are_kept_but_never_value_a_rune(session, settings):

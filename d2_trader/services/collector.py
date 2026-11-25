@@ -101,15 +101,15 @@ async def collect_traderie(
     return stored
 
 
-RUNE_KINDS = ("sold", "ask")
+RUNE_KINDS = ("sold", "ask", "bid")
 
 
 async def collect_rune_listings(
     session: AsyncSession, client: PoliteClient, market: MarketKey, now: datetime
 ) -> int:
-    """Store a market's latest sales of every rune Traderie lists by id, and its open asks.
+    """Store a market's latest sales of every rune Traderie lists by id, and its open asks and bids.
 
-    Sales feed the rune model; asks are the cheapest listings the Runes page shows.
+    Sales feed the rune model; asks and bids are the offers the Runes page ranks.
     """
     stored = 0
     pairs = [(r, i, kind) for r, i in traderie.RUNE_ITEM_IDS.items() for kind in RUNE_KINDS]
@@ -123,7 +123,7 @@ async def collect_rune_listings(
 async def refresh_rates(
     session: AsyncSession, settings: Settings, now: datetime, transport=None
 ) -> int:
-    """Collect rune trades and asks, then re-fit every rune's value from all the trades.
+    """Collect rune trades, asks and bids, then re-fit every rune's value from all the trades.
 
     For the dashboard's default market, so rune values exist before anything is watched;
     every watched market; and every market with rune prices in fg, since the fg rate is

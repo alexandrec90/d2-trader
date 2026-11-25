@@ -52,7 +52,11 @@ class MarketView:
 async def store_listings(
     session: AsyncSession, item_id: int, listings: list[ParsedListing], now: datetime
 ) -> int:
-    """Insert or refresh listings. Seeing one again only moves its `last_seen_at`."""
+    """Insert or refresh listings.
+
+    Seeing one again also takes its price, since a seller may edit it. `alternatives` and
+    `quantity` move together: either alone would pair one price with another's lot size.
+    """
     for listing in listings:
         market = await get_or_create_market(session, listing.market)
         statement = insert(Listing).values(
@@ -73,7 +77,12 @@ async def store_listings(
         await session.execute(
             statement.on_conflict_do_update(
                 index_elements=[Listing.source, Listing.external_id, Listing.kind],
-                set_={"last_seen_at": now, "observed_at": listing.observed_at},
+                set_={
+                    "alternatives": statement.excluded.alternatives,
+                    "quantity": statement.excluded.quantity,
+                    "last_seen_at": now,
+                    "observed_at": listing.observed_at,
+                },
             )
         )
     return len(listings)

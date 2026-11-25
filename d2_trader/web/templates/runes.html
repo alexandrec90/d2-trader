@@ -2,6 +2,9 @@
 {% import "_macros.html" as ui with context %}
 {% block title %}Runes · D2 Trader{% endblock %}
 {% block content %}
+{% macro offer_price(ask) -%}
+{% if ask.wanted %}{{ ask.listing.quantity }} {{ ask.wanted.title() }} for {% for lot in ask.offered %}{% if not loop.first %} + {% endif %}{{ "%g" | format(lot[1]) }} {{ lot[0].title() }}{% endfor %} <span class="muted">(they want)</span>{% else %}{{ ui.listing_price(ask.listing) }}{% endif %}
+{%- endmacro %}
 <section class="page-head">
   <h1>Rune values</h1>
   <p class="muted">{{ market.label }} · from {{ trades }} rune-for-rune trades this season</p>
@@ -35,12 +38,12 @@
     {% set a = p.asks %}
     {% if a and a.cheapest %}
     <div class="scroll"><table class="asks">
-      <caption class="muted">Cheapest {{ a.cheapest | length }} asks, as of {{ humanize(a.seen_at, now) }}{% if a.hidden %} · {{ a.hidden }} bait-priced hidden{% endif %}</caption>
-      <thead><tr><th>Asking</th><th class="num">Ist each</th><th class="num">vs estimate</th><th>Listed</th></tr></thead>
+      <caption class="muted">Cheapest {{ a.cheapest | length }} offers, as of {{ humanize(a.seen_at, now) }}{% if a.hidden %} · {{ a.hidden }} bait-priced hidden{% endif %}</caption>
+      <thead><tr><th>You pay</th><th class="num">Ist each</th><th class="num">vs estimate</th><th>Listed</th></tr></thead>
       <tbody>
         {% for ask in a.cheapest %}
         <tr>
-          <td>{% if ask.listing.url %}<a href="{{ ask.listing.url }}" rel="noreferrer">{{ ui.listing_price(ask.listing) }}</a>{% else %}{{ ui.listing_price(ask.listing) }}{% endif %}</td>
+          <td>{% if ask.listing.url %}<a href="{{ ask.listing.url }}" rel="noreferrer">{{ offer_price(ask) }}</a>{% else %}{{ offer_price(ask) }}{% endif %}</td>
           <td class="num">{{ "%.3g" | format(ask.value) }}</td>
           <td class="num">{{ "%+.0f%%" | format((ask.value / p.today.value - 1) * 100) }}</td>
           <td class="muted">{{ humanize(ask.listing.observed_at, now) }}</td>
@@ -49,14 +52,14 @@
       </tbody>
     </table></div>
     {% else %}
-      <p class="muted">No open asks seen in the last {{ every }}.</p>
+      <p class="muted">No open offers seen in the last {{ every }}.</p>
     {% endif %}
   </section>
   {% endfor %}
 </div>
 <section class="card">
   <p class="muted">The line is the model's value for each day and the band its 95% interval; a dot is the median of that day's trades naming the rune. No trade states a value in Ist, so a dot values the other side of each trade at the model's own estimate for the day. Every rune is fitted together from every trade, so a rune's line also moves with trades it is not in: a Ber sold for Ist moves Lo, through the Lo-for-Ber trades. Each value is a random walk, so a day without trades still has one, its band wider. A dashed rule is a ladder reset, where every value may jump.</p>
-  <p class="muted">Asks come from Traderie's latest page of open listings for each rune, fetched with the trades every {{ every }}, so one may have sold since. Each is valued per rune at its cheapest alternative, at today's rune values; one priced far from the rest of that rune's asks is hidden as bait. "vs estimate" compares it with the line above.</p>
+  <p class="muted">Offers come from Traderie's latest pages of open listings for each rune, both from people who have it and, marked "they want", from people who want another rune and pay in this one; a bundle of runes is listed under its most valuable, at the bundle's discount. They are fetched with the trades every {{ every }}, so one may have sold since. Each is valued per rune at its cheapest alternative, at today's rune values; one priced far from the rest of that rune's offers is hidden as bait. "vs estimate" compares it with the line above.</p>
 </section>
 {% else %}
 <section class="card">

@@ -42,6 +42,17 @@ async def test_storing_twice_keeps_one_row_and_refreshes_last_seen(session, item
     assert (row.first_seen_at, row.last_seen_at) == (NOW, later)
 
 
+async def test_seeing_a_listing_again_takes_its_price_and_lot_size(session, item, make_listing):
+    """So a row stored with the wrong lot size is corrected by the next collection."""
+    first = make_listing("a", 3, quantity=2)
+    await store_listings(session, item.id, [first], NOW)
+    await store_listings(session, item.id, [make_listing("a", 4)], NOW)
+    session.expire_all()
+    row = (await session.execute(select(Listing))).scalar_one()
+    expected = [[list(lot) for lot in alt] for alt in make_listing("a", 4).alternatives]
+    assert (row.alternatives, row.quantity) == (expected, 1)
+
+
 async def test_the_same_id_as_ask_then_sold_is_two_facts(session, item, make_listing):
     await store_listings(
         session,

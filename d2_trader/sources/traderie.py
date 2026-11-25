@@ -82,6 +82,17 @@ def alternatives_from(prices: list[dict]) -> list[Alternative]:
     return [groups[g] for g in sorted(groups)]
 
 
+def lot_size(raw: dict) -> int:
+    """How many items a listing's price buys.
+
+    `amount` is how many the seller has. The price covers them all ("3 Mal for 2 Ist")
+    unless `stock` is set, when it buys one of them. Some listings report an amount of 0.
+    """
+    if raw.get("stock"):
+        return 1
+    return max(int(raw.get("amount") or 1), 1)
+
+
 def parse_listings(payload: dict, market: MarketKey, kind: str) -> list[ParsedListing]:
     """Listings with a stated price. "Make offer" ones carry no price to learn from."""
     parsed = []
@@ -98,7 +109,7 @@ def parse_listings(payload: dict, market: MarketKey, kind: str) -> list[ParsedLi
                 market=market,
                 alternatives=alternatives_from(prices),
                 observed_at=datetime.fromisoformat(raw["updated_at"].replace("Z", "+00:00")),
-                quantity=max(int(raw.get("amount") or 1), 1),
+                quantity=lot_size(raw),
                 ethereal=bool(props.get("Ethereal")),
                 url=listing_url(str(raw["id"])),
                 attrs={"rarity": props.get("Rarity")},
