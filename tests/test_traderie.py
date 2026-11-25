@@ -9,6 +9,7 @@ import httpx
 from d2_trader.markets import MarketKey
 from d2_trader.sources.http import Pace, PoliteClient
 from d2_trader.sources.traderie import (
+    lot_size,
     RUNE_ITEM_IDS,
     alternatives_from,
     fetch_listings,
@@ -113,6 +114,20 @@ def test_zero_amount_is_read_as_one():
     assert listing.quantity == 1
 
 
+def test_a_stock_listings_price_buys_one():
+    # Regression, listing 1002605054383: 2 Gul at Ist + Mal each was read as both for that.
+    raw = raw_listing(amount=2, stock=True)
+    [listing] = parse_listings({"listings": [raw]}, MARKET, "ask")
+    assert listing.quantity == 1
+
+
+def test_a_price_without_stock_buys_the_whole_lot():
+    # Observed: "4 Gul for 1 Lo" has `stock: false`.
+    for raw in (raw_listing(amount=4, stock=False), raw_listing(amount=4)):
+        [listing] = parse_listings({"listings": [raw]}, MARKET, "ask")
+        assert listing.quantity == 4
+
+
 def test_empty_payloads_parse_to_nothing():
     assert parse_listings({}, MARKET, "ask") == []
     assert parse_listings({"listings": None}, MARKET, "ask") == []
@@ -150,3 +165,9 @@ async def test_fetch_listings_parses_the_response():
     async with client({"listings": [raw_listing()]}) as api:
         [listing] = await fetch_listings(api, "1", MARKET, "sold")
     assert listing.kind == "sold"
+
+
+def test_lot_size_is_one_where_the_price_is_per_item():
+    assert lot_size({"amount": 2, "stock": True}) == 1
+    assert lot_size({"amount": 3}) == 3
+    assert lot_size({"amount": 0}) == 1

@@ -16,6 +16,7 @@ from d2_trader.services.rune_values import (
     Ask,
     RuneAsks,
     active_asks,
+    bid_offers,
     fit_market,
     model_floor,
     rank_asks,
@@ -185,6 +186,53 @@ def test_an_ask_nothing_can_value_is_left_out():
 def test_a_runes_asks_say_when_they_were_last_seen():
     rows = [("Lo", ask([[["ist", 5.0]]], seen=NOW - timedelta(hours=h))) for h in (1, 3)]
     assert rank_asks(rows, RATES)["lo"].seen_at == NOW - timedelta(hours=1)
+
+
+def bid(alternatives, quantity=1):
+    return Listing(kind="bid", alternatives=alternatives, quantity=quantity, last_seen_at=NOW)
+
+
+def test_a_bid_is_an_offer_of_the_rune_it_pays_in():
+    """Observed: wants 2 Ist, has 5 Um."""
+    [(rune, offer)] = bid_offers("ist", bid([[["um", 5.0]]], quantity=2), RATES)
+    assert (rune, offer.wanted, offer.offered) == ("um", "ist", [("um", 5.0)])
+    assert offer.value == pytest.approx(0.4)
+
+
+def test_a_bundle_is_offered_under_its_main_rune_at_the_bundles_discount():
+    [(rune, offer)] = bid_offers("ber", bid([[["ohm", 1.0], ["lo", 5.0]]]), RATES)
+    assert rune == "lo"
+    assert offer.value / RATES["lo"] == pytest.approx(14 / 28)
+
+
+def test_each_alternative_of_a_bid_is_its_own_offer():
+    found = bid_offers("ber", bid([[["lo", 3.0]], [["ohm", 5.0]], [["lo", 4.0]]]), RATES)
+    assert {rune: offer.value for rune, offer in found} == {"lo": 3.5, "ohm": 2.8}
+
+
+@pytest.mark.parametrize(
+    "paid", [[], [["jewel", 10.0], ["lo", 1.0]], [["ist", 1.0]], [["lo", 0.0]]]
+)
+def test_a_bid_that_offers_no_other_runes_is_left_out(paid):
+    assert bid_offers("ist", bid([paid]), RATES) == []
+
+
+def test_a_bid_for_something_unvalued_is_left_out():
+    assert bid_offers("mystery", bid([[["lo", 1.0]]]), RATES) == []
+
+
+def test_asks_and_bids_are_ranked_together():
+    rows = [("Lo", ask([[["ist", 4.5]]])), ("Ist", bid([[["lo", 1.0]]], quantity=4))]
+    ranked = rank_asks(rows, RATES)
+    assert [(a.value, a.wanted) for a in ranked["lo"].cheapest] == [(4.0, "ist"), (4.5, None)]
+    assert "ist" not in ranked
+
+
+async def test_an_open_bid_is_active(session):
+    ist = await rune_item(session, "ist")
+    await store_listings(session, ist.id, [sold(1, [[("lo", 1.0)]], NOW, kind="bid")], NOW)
+    found = await active_asks(session, LADDER, NOW - timedelta(hours=13))
+    assert [(name, row.kind) for name, row in found] == [("Ist", "bid")]
 
 
 async def test_only_asks_still_seen_in_this_market_are_active(session):
