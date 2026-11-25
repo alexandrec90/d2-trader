@@ -19,8 +19,9 @@ x-app-image: &app-image
   environment:
     DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-d2_trader}:${POSTGRES_PASSWORD:-d2_trader_local_dev}@db:5432/${POSTGRES_DB:-d2_trader}
   volumes:
-    # Bind-mounted for live reload. The venv stays in an anonymous volume so the
-    # host's (Windows) .venv never shadows the container's (Linux) one.
+    # Bind-mounted so a merge into this checkout reaches the containers. The venv stays in
+    # an anonymous volume so the host's (Windows) .venv never shadows the container's
+    # (Linux) one.
     - .:/app
     - /app/.venv
   depends_on:
@@ -60,6 +61,10 @@ services:
 
   app:
     <<: *app-image
+    # `release` migrates, starts the command, and has it exit when a merge changes the
+    # code; `unless-stopped` then starts the new code. An edit to this file or the
+    # Dockerfile is the one thing it cannot deploy.
+    command: ["python", "-m", "d2_trader.release", "serve"]
     restart: unless-stopped
     ports:
       # Loopback only: the dashboard has no login, and it can change alerts and rates.
@@ -70,7 +75,7 @@ services:
 
   worker:
     <<: *app-image
-    command: ["python", "-m", "d2_trader", "worker"]
+    command: ["python", "-m", "d2_trader.release", "worker"]
     restart: unless-stopped
     depends_on:
       migrate:

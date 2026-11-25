@@ -31,8 +31,10 @@ COPY pyproject.toml uv.lock* ./
 RUN uv pip install --system --no-cache-dir -e .
 
 FROM base AS dev
-COPY pyproject.toml uv.lock* ./
-RUN uv pip install --system --no-cache-dir -e ".[dev]"
+# The locked versions, by the same code that installs a merged bump into a running
+# container. Only its two files are copied, so a source edit keeps this layer.
+COPY d2_trader/__init__.py d2_trader/release.py ./d2_trader/
+RUN python -m d2_trader.release deps
 COPY . .
 CMD ["python", "-m", "d2_trader"]
 

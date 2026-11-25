@@ -8,7 +8,7 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from d2_trader.models import Base
 
@@ -22,6 +22,9 @@ if config.config_file_name is not None:
 
 # `alembic revision --autogenerate` compares this with the database to write a revision.
 target_metadata = Base.metadata
+
+# The dashboard and the worker both migrate as they start, and a merge restarts both.
+MIGRATION_LOCK = 8010
 
 
 def database_url() -> str:
@@ -50,6 +53,8 @@ def run_migrations_online() -> None:
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
+            # Held to the commit, so a second upgrade reads the version the first wrote.
+            connection.execute(text(f"SELECT pg_advisory_xact_lock({MIGRATION_LOCK})"))
             context.run_migrations()
 
 

@@ -189,10 +189,14 @@ async def tick(sessions: Sessions, settings: Settings) -> list[SourceRun]:
     return runs
 
 
-async def run_forever(sessions: Sessions, settings: Settings) -> None:
+async def run_forever(
+    sessions: Sessions, settings: Settings, stale: Callable[[], bool] = lambda: False
+) -> None:
+    """Tick until `stale`, asked only between ticks: a job cut off halfway would leave no
+    record, and its site would be polled again at once."""
     async with sessions() as session, session.begin():
         await ensure_seed_seasons(session)
-    while True:
+    while not stale():
         await tick(sessions, settings)
         async with sessions() as session, session.begin():
             await collector.send_season_events(session, settings, utcnow())

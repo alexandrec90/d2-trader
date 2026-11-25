@@ -1,0 +1,19 @@
+# The stack deploys merges itself once its containers run `d2_trader.release`. The ones
+# running when this merges do not, so they are recreated once.
+when = "merged"
+on = "DESKTOP-ML5F3PJ"
+agent = """
+Recreate the running d2-trader Docker stack on this machine once, so its containers run
+`python -m d2_trader.release`, which deploys every later merge by itself.
+
+Steps:
+1. Run `docker ps` first; a daemon error means Docker Desktop is stopped: start it.
+2. The stack belongs to the project's main checkout (the one with `.env`), not a worktree.
+   Fast-forward it to origin's default branch; it must hold `d2_trader/release.py`. If it
+   cannot be fast-forwarded, stop and report.
+3. From that checkout: `docker compose up -d --build`. The project name is unchanged, so
+   this recreates the same containers on the same volume: no data is lost. Never use `-v`.
+4. Done when `docker compose ps` shows app and worker running and not restarting,
+   `docker inspect` shows both commands naming `d2_trader.release`, and
+   http://127.0.0.1:8010/runes answers 200.
+"""

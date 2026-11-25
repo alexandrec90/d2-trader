@@ -68,6 +68,15 @@ def test_serve_starts_the_app_factory(monkeypatch):
     assert calls[0][1]["factory"] is True
 
 
+def test_serve_watches_for_a_new_release(monkeypatch):
+    watched = []
+    monkeypatch.setattr(cli.uvicorn, "run", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "watch_in_background", watched.append)
+    monkeypatch.setenv("D2_TRADER_RELEASE", "sha:code")
+    assert cli.main(["serve"]) == 0
+    assert watched[0].commit == "sha"
+
+
 def test_worker_runs_the_schedule(monkeypatch):
     ran = []
     monkeypatch.setattr(cli, "run_async", lambda coroutine: ran.append(coroutine.close()))
