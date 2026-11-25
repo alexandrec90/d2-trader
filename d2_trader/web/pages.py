@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from d2_trader.alerts import DIRECTIONS, METRICS
-from d2_trader.currency import format_like, format_range, format_value
+from d2_trader.currency import display_name, format_like, format_range, format_value
 from d2_trader.markets import GAME_VERSIONS, MODES, PLATFORMS, VERSION_LABELS, MarketKey
 from d2_trader.models import utcnow
 from d2_trader.seasons import Phase
@@ -77,4 +77,5 @@ async def render(
 templates.env.globals["format_value"] = format_value
 templates.env.globals["format_range"] = format_range
 templates.env.globals["format_like"] = format_like
+templates.env.globals["currency_name"] = display_name
 templates.env.globals["humanize"] = humanize_delta

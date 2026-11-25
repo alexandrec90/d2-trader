@@ -11,7 +11,7 @@ transfer (or `HISTORY_DAYS`, if none is known). Asks and bids are read only whil
 still sees them up, so none from an earlier season can appear either.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from d2_trader.currency import (
+    GOODS,
     RUNES,
     SEED_RATES,
     Alternative,
@@ -36,6 +37,7 @@ from d2_trader.stats import drop_outliers
 
 HISTORY_DAYS = 120
 CHEAPEST = 10
+TRADED = frozenset((*RUNES, *GOODS))
 
 
 async def rune_item(session: AsyncSession, rune: str, traderie_id: str | None = None) -> Item:
@@ -60,20 +62,27 @@ def model_floor(seasons: list[Season], ladder: bool, now: datetime) -> datetime:
     return floor or now - timedelta(days=HISTORY_DAYS)
 
 
-async def rune_trades(session: AsyncSession, market: MarketKey, since: datetime) -> list[Trade]:
-    """Every completed rune-for-rune sale in a market since a moment."""
+async def sold_rows(
+    session: AsyncSession, market: MarketKey, since: datetime, names: Sequence[str]
+) -> list[tuple[str, Listing]]:
+    """Every completed sale of the named items (lower case) in a market since a moment."""
     query = (
-        select(Listing, Item.name)
+        select(Item.name, Listing)
         .join(Item, Item.id == Listing.item_id)
         .where(
-            func.lower(Item.name).in_(rune_item_names()),
+            func.lower(Item.name).in_(names),
             Listing.market_id.in_(await comparable_market_ids(session, market)),
             Listing.kind == "sold",
             Listing.observed_at >= since,
         )
     )
+    return [(name, listing) for name, listing in (await session.execute(query)).all()]
+
+
+async def rune_trades(session: AsyncSession, market: MarketKey, since: datetime) -> list[Trade]:
+    """Every completed rune-for-rune sale in a market since a moment."""
     trades = []
-    for listing, name in (await session.execute(query)).all():
+    for name, listing in await sold_rows(session, market, since, rune_item_names()):
         rune = normalize_currency(name)
         day = listing.observed_at.date()
         trade = trade_from(rune, day, listing.quantity, listing.alternatives)
@@ -114,8 +123,9 @@ def bid_offers(wanted: str, listing: Listing, rates: Mapping[str, float]) -> lis
 
     Each alternative is its own offer, since whoever fills the bid picks one. A bundle is
     listed under its most valuable rune, its cost split in proportion to value, so that
-    rune shows the whole bundle's discount. One holding anything but runes is left out,
-    as too roughly valued, and so is one paying in the rune it wants.
+    rune shows the whole bundle's discount. One holding anything but runes and goods is
+    left out, as too roughly valued, and so is one paying in what it wants. A good counts
+    only if `rates` has it, and the pages' rates hold no unmeasured good.
     """
     cost = alternative_value([(wanted, max(listing.quantity, 1))], rates)
     if not cost:
@@ -123,7 +133,7 @@ def bid_offers(wanted: str, listing: Listing, rates: Mapping[str, float]) -> lis
     cheapest: dict[str, Ask] = {}
     for alternative in listing.alternatives:
         lots = [(str(c), float(q)) for c, q in alternative]
-        if any(c not in RUNES or c == wanted or q <= 0 for c, q in lots):
+        if any(c not in TRADED or c == wanted or q <= 0 for c, q in lots):
             continue
         worth = alternative_value(lots, rates)
         if not worth:
@@ -163,14 +173,17 @@ def rank_asks(
 
 
 async def active_asks(
-    session: AsyncSession, market: MarketKey, seen_since: datetime
+    session: AsyncSession,
+    market: MarketKey,
+    seen_since: datetime,
+    names: Sequence[str] | None = None,
 ) -> list[tuple[str, Listing]]:
-    """Every rune ask and bid a collector has seen still up since `seen_since`."""
+    """Every ask and bid for the named items (runes, if none) seen up since `seen_since`."""
     query = (
         select(Item.name, Listing)
         .join(Item, Item.id == Listing.item_id)
         .where(
-            func.lower(Item.name).in_(rune_item_names()),
+            func.lower(Item.name).in_(rune_item_names() if names is None else names),
             Listing.market_id.in_(await comparable_market_ids(session, market)),
             Listing.kind.in_(("ask", "bid")),
             Listing.last_seen_at >= seen_since,

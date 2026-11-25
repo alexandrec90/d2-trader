@@ -4,6 +4,7 @@ A listing's price is a list of alternatives, any one of which the seller accepts
 alternative is a list of (currency, quantity) lots that are all paid together.
 """
 
+import string
 from collections.abc import Iterable, Mapping
 
 Alternative = list[tuple[str, float]]
@@ -47,6 +48,54 @@ RUNES = (
     "mal ist gul vex ohm lo sur ber jah cham zod"
 ).split()
 
+# Everything else traded in bulk as money, by family, under Traderie's names. Each is
+# valued against the runes it trades for (`goods.py`). Taken from what rune listings ask
+# for in payment (2026-11-25); "Random" and "Set" ones are Traderie's own groupings.
+GOODS_BY_FAMILY: dict[str, tuple[str, ...]] = {
+    "Worldstone shards": (
+        "Deep Worldstone Shard",
+        "Northern Worldstone Shard",
+        "Southern Worldstone Shard",
+        "Western Worldstone Shard",
+        "Eastern Worldstone Shard",
+        "Shard Set",
+    ),
+    "Keys": (
+        "Key of Terror",
+        "Key of Hate",
+        "Key of Destruction",
+        "Random Minor Key",
+        "3x3 Key Set",
+    ),
+    "Gems": (
+        "Perfect Amethyst",
+        "Perfect Diamond",
+        "Perfect Emerald",
+        "Perfect Ruby",
+        "Perfect Sapphire",
+        "Perfect Skull",
+        "Perfect Topaz",
+        "Random Gems",
+    ),
+    "Statues": (
+        "Worusk's End",
+        "Korlic's Pain",
+        "Bul-Kathos' Nightmare",
+        "Talic's Anguish",
+        "Madawc's Ire",
+        "Statue Set",
+    ),
+    "Essences and tokens": (
+        "Twisted Essence of Suffering",
+        "Charged Essence of Hatred",
+        "Burning Essence of Terror",
+        "Festering Essence of Destruction",
+        "Token of Absolution",
+    ),
+}
+# Currency key to display name, in the order the Currencies page shows them.
+GOODS = {name.lower(): name for family in GOODS_BY_FAMILY.values() for name in family}
+
 # What a price shows when there is none.
 NO_VALUE = "\N{EN DASH}"
 DISPLAY_UNITS = ("zod", "ber", "lo", "ist")
@@ -60,6 +109,11 @@ def normalize_currency(name: str) -> str:
     if key in ("forum gold", "forumgold"):
         return "fg"
     return key.removesuffix(" rune")
+
+
+def display_name(currency: str) -> str:
+    """How a currency is written: 'Key of Terror', "Worusk's End", 'Ber'."""
+    return GOODS.get(currency) or string.capwords(currency)
 
 
 def alternative_value(lots: Iterable[tuple[str, float]], rates: Mapping[str, float]):
@@ -117,7 +171,7 @@ def format_like(value: float | None, reference: float, rates: Mapping[str, float
 
 def format_in(value: float, currency: str, rates: Mapping[str, float]) -> str:
     """A value in a stated currency, which must have a rate."""
-    return f"{value / rates[currency]:.3g} {currency.title()}"
+    return f"{value / rates[currency]:.3g} {display_name(currency)}"
 
 
 def format_range(

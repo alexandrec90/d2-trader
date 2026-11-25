@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("serve", help="the dashboard")
     commands.add_parser("worker", help="the collection schedule")
     once = commands.add_parser("run", help="one collection job, now")
-    once.add_argument("job", choices=["seasons", "catalog", "diablo2io", "traderie", "rates"])
+    once.add_argument("job", choices=["seasons", "catalog", "diablo2io", "traderie", "rates", "goods"])
     value = commands.add_parser("rune-value", help="one rune's modelled value in a market")
     value.add_argument("rune", type=normalize_currency, choices=RUNES)
     value.add_argument("--platform", choices=PLATFORMS, default="PC")

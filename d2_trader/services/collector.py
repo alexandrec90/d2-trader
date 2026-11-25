@@ -8,12 +8,14 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from d2_trader.config import Settings
+from d2_trader.currency import GOODS
 from d2_trader.markets import MarketKey
 from d2_trader.models import Item, WatchItem
 from d2_trader.seasons import season_events
 from d2_trader.services.calendar import apply_date, find_disagreements, load_seasons
 from d2_trader.services.catalog import get_or_create_market, market_key, upsert_catalog
 from d2_trader.services.fg_rates import fg_markets
+from d2_trader.services.goods_values import fit_market_goods, goods_item
 from d2_trader.services.notify import Message, deliver
 from d2_trader.services.pricing import store_listings
 from d2_trader.services.rates import store_derived_rates
@@ -101,7 +103,7 @@ async def collect_traderie(
     return stored
 
 
-RUNE_KINDS = ("sold", "ask", "bid")
+LISTING_KINDS = ("sold", "ask", "bid")
 
 
 async def collect_rune_listings(
@@ -112,11 +114,57 @@ async def collect_rune_listings(
     Sales feed the rune model; asks and bids are the offers the Runes page ranks.
     """
     stored = 0
-    pairs = [(r, i, kind) for r, i in traderie.RUNE_ITEM_IDS.items() for kind in RUNE_KINDS]
+    pairs = [(r, i, kind) for r, i in traderie.RUNE_ITEM_IDS.items() for kind in LISTING_KINDS]
     for rune, remote_id, kind in shuffled(pairs):
         item = await rune_item(session, rune, remote_id)
         listings = await traderie.fetch_listings(client, remote_id, market, kind)
         stored += await store_listings(session, item.id, listings, now)
+    return stored
+
+
+async def collect_goods_listings(
+    session: AsyncSession, client: PoliteClient, market: MarketKey, now: datetime
+) -> int:
+    """Store a market's latest sales, asks and bids of every good Traderie lists."""
+    stored = 0
+    pairs = [(good, kind) for good in GOODS for kind in LISTING_KINDS]
+    missing: set[str] = set()
+    for good, kind in shuffled(pairs):
+        if good in missing:
+            continue
+        item = await goods_item(session, good)
+        remote_id = await _traderie_id(client, item)
+        if remote_id is None:
+            missing.add(good)
+            continue
+        listings = await traderie.fetch_listings(client, remote_id, market, kind)
+        stored += await store_listings(session, item.id, listings, now)
+    return stored
+
+
+async def measured_targets(session: AsyncSession, now: datetime) -> dict[int, MarketKey]:
+    """The markets whose currencies are measured.
+
+    The dashboard's default market, so values exist before anything is watched; every
+    watched market; and every market with rune prices in fg, since the fg rate is measured
+    against rune values.
+    """
+    default = await get_or_create_market(session, MarketKey())
+    markets = {default.id: MarketKey()}
+    markets |= {w.market_id: market_key(w.market) for w in await enabled_watches(session)}
+    return markets | dict(await fg_markets(session, now))
+
+
+async def collect_goods(
+    session: AsyncSession, settings: Settings, now: datetime, transport=None
+) -> int:
+    """Collect gems, shards, keys and the like. The rates job values them, hourly."""
+    if not settings.traderie_enabled:
+        raise SourceDisabled("off: goods come from Traderie trades (see README)")
+    stored = 0
+    async with _client(settings, settings.traderie_min_interval_s, transport) as client:
+        for market in (await measured_targets(session, now)).values():
+            stored += await collect_goods_listings(session, client, market, now)
     return stored
 
 
@@ -125,16 +173,12 @@ async def refresh_rates(
 ) -> int:
     """Collect rune trades, asks and bids, then re-fit every rune's value from all the trades.
 
-    For the dashboard's default market, so rune values exist before anything is watched;
-    every watched market; and every market with rune prices in fg, since the fg rate is
-    measured against these values. See `rune_model.py` for how.
+    Goods are then re-valued against those runes, from what the goods job last collected
+    and the rune sales just stored. See `rune_model.py` and `goods.py` for how.
     """
     if not settings.traderie_enabled:
         raise SourceDisabled("off: rates come from Traderie trades (see README)")
-    default = await get_or_create_market(session, MarketKey())
-    markets = {default.id: MarketKey()}
-    markets |= {w.market_id: market_key(w.market) for w in await enabled_watches(session)}
-    markets |= dict(await fg_markets(session, now))
+    markets = await measured_targets(session, now)
     seasons = await load_seasons(session)
     stored = 0
     async with _client(settings, settings.traderie_min_interval_s, transport) as client:
@@ -142,6 +186,8 @@ async def refresh_rates(
             await collect_rune_listings(session, client, market, now)
             fit = await fit_market(session, market, seasons, now)
             stored += await store_derived_rates(session, market_id, fit.today(), fit.direct)
+            goods = await fit_market_goods(session, market, fit, seasons, now)
+            stored += await store_derived_rates(session, market_id, goods.today(), goods.direct)
     return stored
 
 

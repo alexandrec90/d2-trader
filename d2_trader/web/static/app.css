@@ -214,6 +214,9 @@ dl.plain dd { margin: 0; color: var(--ink-2); }
 .rune-card h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; }
 .rune-value { font-variant-numeric: tabular-nums; }
 .rune-card p { margin: 0; }
+.deal-good strong { color: var(--good); }
+.deal-bad strong { color: var(--bad); }
+.deal-fair strong, .deal-unclear strong { color: var(--warn); }
 .asks td:not(:first-child), .asks th { white-space: nowrap; }
 .market-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
 .market-picker [aria-current] { font-weight: 600; color: var(--ink); text-decoration: none; }

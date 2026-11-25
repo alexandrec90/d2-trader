@@ -9,12 +9,15 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from d2_trader.currency import RUNES
+from d2_trader.config import Settings
+from d2_trader.currency import GOODS, RUNES
+from d2_trader.goods import GoodsFit
 from d2_trader.markets import GAME_VERSIONS, MODES, PLATFORMS, MarketKey
-from d2_trader.models import utcnow
+from d2_trader.models import Listing, utcnow
 from d2_trader.rune_model import RuneFit
 from d2_trader.seasons import Season
 from d2_trader.services.calendar import current_state
+from d2_trader.services.goods_values import fit_market_goods
 from d2_trader.services.rates import load_rates, manual_currencies
 from d2_trader.services.rune_values import (
     RuneAsks,
@@ -85,11 +88,39 @@ def panels(
     return found
 
 
-async def valuation_rates(session: AsyncSession, fit: RuneFit) -> dict[str, float]:
-    """Today's modelled rune values, over the seeds; a rate pinned by hand still wins."""
+def page_market(platform: str, mode: str, ladder: bool, version: str) -> MarketKey:
+    """The market a page's query asks for, each bad part replaced by the default."""
+    return MarketKey(
+        platform if platform in PLATFORMS else "PC",
+        mode if mode in MODES else "softcore",
+        ladder,
+        version if version in GAME_VERSIONS else "rotw",
+    )
+
+
+async def open_offers(
+    session: AsyncSession, market: MarketKey, settings: Settings, now: datetime
+) -> list[tuple[str, Listing]]:
+    """Every rune and good on offer, as of each one's own job: its latest run still saw it."""
+    runes_since = now - timedelta(hours=settings.rates_poll_hours + 1)
+    goods_since = now - timedelta(hours=settings.goods_poll_hours + 1)
+    runes = await active_asks(session, market, runes_since)
+    return runes + await active_asks(session, market, goods_since, list(GOODS))
+
+
+async def valuation_rates(
+    session: AsyncSession, fit: RuneFit, goods: GoodsFit | None = None
+) -> dict[str, float]:
+    """Today's modelled values, over the runes' seeds; a rate pinned by hand still wins.
+
+    A good's seed is a guess and would rank a guess as a bargain, so one not measured
+    here has no value at all.
+    """
     base = await load_rates(session, None)
     pinned = {c: base[c] for c in await manual_currencies(session) if c in base}
-    return {**base, **fit.today(), **pinned}
+    seeds = {c: v for c, v in base.items() if c not in GOODS}
+    measured = goods.measured() if goods else {}
+    return {**seeds, **fit.today(), **measured, **pinned}
 
 
 @router.get("/runes", response_class=HTMLResponse)
@@ -102,20 +133,14 @@ async def runes_page(
     version: Annotated[str, Query()] = "rotw",
 ):
     now = utcnow()
-    market = MarketKey(
-        platform if platform in PLATFORMS else "PC",
-        mode if mode in MODES else "softcore",
-        ladder,
-        version if version in GAME_VERSIONS else "rotw",
-    )
+    market = page_market(platform, mode, ladder, version)
     _, seasons = await current_state(session, now)
     fit = await fit_market(session, market, seasons, now)
     markets = await measured_markets(session)
-    # Asks are fetched by the rates job: one seen in its latest run is still up.
-    every = request.app.state.settings.rates_poll_hours
-    seen_since = now - timedelta(hours=every + 1)
-    rows = await active_asks(session, market, seen_since)
-    asks = rank_asks(rows, await valuation_rates(session, fit))
+    goods = await fit_market_goods(session, market, fit, seasons, now)
+    settings = request.app.state.settings
+    rows = await open_offers(session, market, settings, now)
+    asks = rank_asks(rows, await valuation_rates(session, fit, goods))
     return await render(
         request,
         session,
@@ -124,5 +149,5 @@ async def runes_page(
         markets=[(m, market_query(m)) for m in markets],
         panels=panels(fit, seasons, now, asks),
         trades=fit.trades,
-        every=hours_label(every),
+        every=hours_label(settings.rates_poll_hours),
     )

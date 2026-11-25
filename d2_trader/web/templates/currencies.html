@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% import "_macros.html" as ui with context %}
+{% block title %}Currencies · D2 Trader{% endblock %}
+{% macro lots(side) -%}
+{% for currency, quantity in side %}{% if not loop.first %} + {% endif %}{{ "%g" | format(quantity) }} {{ currency_name(currency) }}{% endfor %}
+{%- endmacro %}
+{% block content %}
+<section class="page-head">
+  <h1>Currencies</h1>
+  <p class="muted">{{ market.label }} · from {{ trades }} trades against runes this season</p>
+  {% if markets | length > 1 %}
+  <nav class="market-picker" aria-label="Market">
+    {% for m, query in markets %}
+      <a href="/currencies?{{ query }}" {% if m == market %}aria-current="page"{% endif %}>{{ m.label }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Is it a good deal?</h2>
+  <form class="grid" method="get" action="/currencies">
+    <input type="hidden" name="platform" value="{{ market.platform }}">
+    <input type="hidden" name="mode" value="{{ market.mode }}">
+    <input type="hidden" name="ladder" value="{{ "true" if market.ladder else "false" }}">
+    <input type="hidden" name="version" value="{{ market.game_version }}">
+    <label>You give <input name="give" value="{{ give }}" required maxlength="200" placeholder="20 deep shards"></label>
+    <label>You get <input name="get" value="{{ get }}" required maxlength="200" placeholder="1 ist"></label>
+    <button>Check</button>
+  </form>
+  {% if deal_error %}<p class="flash error" role="alert">{{ deal_error }}</p>{% endif %}
+  {% if deal %}
+  <p class="deal deal-{{ deal.verdict }}" role="status">
+    <strong>{{ {"good": "Good deal", "bad": "Bad deal", "fair": "Fair trade", "unclear": "Too close to call"}[deal.verdict] }}</strong>
+    You get {{ "%+.0f%%" | format((deal.ratio - 1) * 100) }} in value
+    <span class="muted">(95% CI {{ "%+.0f%%" | format((deal.low - 1) * 100) }} to {{ "%+.0f%%" | format((deal.high - 1) * 100) }})</span>
+  </p>
+  <p>{{ lots(deal.give) }} <span class="muted">is worth {{ "%.3g" | format(deal.give_ist) }} Ist;</span> {{ lots(deal.get) }} <span class="muted">is worth {{ "%.3g" | format(deal.get_ist) }} Ist.</span>
+    {% if deal.fair_give %}Break-even is {{ "%.3g" | format(deal.fair_give) }} {{ currency_name(deal.give[0][0]) }}.{% endif %}</p>
+  {% endif %}
+  <details><summary class="muted">What can I type?</summary>
+    <p class="muted">Amounts and names, joined with "+": "2 pul + 10 amethysts". A short name works while only one currency fits it. {{ names | join(", ") }}.</p>
+  </details>
+</section>
+
+{% for family in families %}
+<h2>{{ family.name }}</h2>
+{% if family.panels %}
+<div class="rune-grid">
+  {% for p in family.panels %}
+  <section class="card rune-card">
+    <h2>{{ p.name }}
+      <span class="rune-value">{{ "%.3g" | format(1 / p.today.value) }} per Ist</span>
+      <span class="muted">· {{ "%.3g" | format(p.today.value) }} Ist each</span>
+    </h2>
+    <p class="muted">95% CI {{ "%.3g" | format(1 / p.today.high) }} to {{ "%.3g" | format(1 / p.today.low) }} per Ist · {{ p.direct }} {{ "trade" if p.direct == 1 else "trades" }}{% if p.few %} · too few to trust{% endif %}</p>
+    {% if p.chart %}
+      <div class="chart-wrap" data-chart>
+        {{ p.chart.svg }}
+        <div class="tooltip" hidden></div>
+        <script type="application/json">{{ p.chart.data }}</script>
+      </div>
+    {% else %}
+      <p class="muted">One day of trades so far: a line needs two.</p>
+    {% endif %}
+    {{ ui.offers_table(p.asks, p.today.value, every) }}
+  </section>
+  {% endfor %}
+</div>
+{% endif %}
+{% if family.untraded %}<p class="muted">No trades against runes stored yet: {{ family.untraded | join(", ") }}.</p>{% endif %}
+{% endfor %}
+
+<section class="card">
+  <p class="muted">Each trade of a good for runes, or of a rune for one kind of good, is a reading of its value in Ist at the Runes page's values for that day. A good's readings feed one model of its price: the line is its value each day, the band its 95% interval, a dot the median of that day's readings. Sales offering several alternatives, or paid in a mix, do not say what one good was worth and are left out.</p>
+  <p class="muted">Offers work as on the Runes page, and are fetched with the trades every {{ every }}. A rune on sale for gems, shards or keys is listed under that rune, on the Runes page. "Too close to call" means the difference is smaller than the doubt about today's values.</p>
+</section>
+{% endblock %}

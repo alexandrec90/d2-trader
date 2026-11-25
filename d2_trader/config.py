@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Rune trades and the rune asks the Runes page lists. Hourly by the operator's choice
     # (2026-11-23): a cheap ask sells within minutes, so one fetched 12 hours ago is gone.
     rates_poll_hours: int = 1
+    # Gems, shards, keys and the like: about 90 requests a market, more than twice what the
+    # runes cost, so less often. Their offers on the Currencies page are up to this old.
+    goods_poll_hours: int = 3
 
     # How long an ask stays live after a collector last saw it.
     ask_stale_hours: int = 6

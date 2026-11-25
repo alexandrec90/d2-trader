@@ -23,6 +23,7 @@ from d2_trader.services.rune_values import (
     report,
     rune_item,
     rune_trades,
+    sold_rows,
 )
 from d2_trader.sources.types import ParsedListing
 
@@ -215,6 +216,24 @@ def test_each_alternative_of_a_bid_is_its_own_offer():
 )
 def test_a_bid_that_offers_no_other_runes_is_left_out(paid):
     assert bid_offers("ist", bid([paid]), RATES) == []
+
+
+def test_a_bid_paying_in_a_measured_good_is_an_offer_of_it():
+    rates = {**RATES, "deep worldstone shard": 0.05}
+    [(good, offer)] = bid_offers("ist", bid([[["deep worldstone shard", 25.0]]]), rates)
+    assert good == "deep worldstone shard" and offer.value == pytest.approx(0.04)
+
+
+def test_a_bid_paying_in_an_unmeasured_good_is_left_out():
+    assert bid_offers("ist", bid([[["deep worldstone shard", 25.0]]]), RATES) == []
+
+
+async def test_sold_rows_are_the_named_items_only(session):
+    lo, ist = await rune_item(session, "lo"), await rune_item(session, "ist")
+    await store_listings(session, lo.id, [sold(1, [[("ist", 5.0)]], NOW)], NOW)
+    await store_listings(session, ist.id, [sold(2, [[("lo", 0.2)]], NOW)], NOW)
+    rows = await sold_rows(session, LADDER, NOW - timedelta(days=1), ["lo"])
+    assert [(name, row.external_id) for name, row in rows] == [("Lo", "x1")]
 
 
 def test_a_bid_for_something_unvalued_is_left_out():
