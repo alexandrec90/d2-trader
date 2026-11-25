@@ -108,6 +108,11 @@ async def test_item_search_answers_as_json(client, watch_id):
     assert response.json() == [{"name": "Shako", "category": "uniques"}]
 
 
+async def test_a_watched_items_page_marks_the_watchlists_tab(client, watch_id):
+    page = await client.get(f"/watch/{watch_id}")
+    assert '<a href="/" aria-current="page">Watchlists</a>' in page.text
+
+
 async def test_watch_page_shows_no_data_honestly(client, watch_id):
     page = await client.get(f"/watch/{watch_id}")
     assert page.status_code == 200
