@@ -17,6 +17,7 @@ from d2_trader.currency import RUNES, normalize_currency
 from d2_trader.db import make_engine, make_sessions
 from d2_trader.markets import GAME_VERSIONS, MODES, PLATFORMS, MarketKey
 from d2_trader.models import SourceRun
+from d2_trader.release import started_release, watch_in_background
 from d2_trader.services.calendar import ensure_seed_seasons, load_seasons
 from d2_trader.services.rune_values import fit_market, report
 from d2_trader.services.worker import job_specs, run_forever, run_job
@@ -50,7 +51,8 @@ async def rune_value_lines(rune: str, market: MarketKey, days: int) -> list[str]
 
 async def run_worker() -> None:
     settings = get_settings()
-    await run_forever(make_sessions(make_engine(settings.database_url)), settings)
+    sessions = make_sessions(make_engine(settings.database_url))
+    await run_forever(sessions, settings, started_release().stale)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -86,7 +88,14 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "rune-value":
         print("\n".join(run_async(rune_value_lines(args.rune, market_from(args), args.days))))
     else:
-        uvicorn.run(create_app, factory=True, host="0.0.0.0", port=8000)  # noqa: S104 - inside a container
+        watch_in_background(started_release())
+        uvicorn.run(
+            create_app,
+            factory=True,
+            host="0.0.0.0",  # noqa: S104 - inside a container
+            port=8000,
+            timeout_graceful_shutdown=10,  # an open page must not hold up a deploy
+        )
     return 0
 
 

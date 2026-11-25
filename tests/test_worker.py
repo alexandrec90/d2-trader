@@ -127,6 +127,23 @@ async def test_the_forever_loop_seeds_ticks_and_sleeps(monkeypatch, sessions, se
         assert await load_seasons(session)
 
 
+async def test_the_forever_loop_ends_between_ticks_on_a_new_release(
+    monkeypatch, sessions, settings
+):
+    ticks = []
+
+    async def fake_tick(_sessions, _settings):
+        ticks.append(1)
+
+    async def no_sleep(_seconds):
+        pass
+
+    monkeypatch.setattr("d2_trader.services.worker.asyncio.sleep", no_sleep)
+    monkeypatch.setattr("d2_trader.services.worker.tick", fake_tick)
+    await run_forever(sessions, settings, lambda: len(ticks) == 2)
+    assert ticks == [1, 1]
+
+
 async def test_a_failed_job_leaves_a_record_behind(sessions, settings):
     await run_job(sessions, job(ValueError("broke")), settings)
     async with sessions() as session:

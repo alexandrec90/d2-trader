@@ -7,6 +7,7 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, select, text
+from sqlalchemy.pool import NullPool
 
 from d2_trader.markets import MarketKey
 from d2_trader.models import Base, Item, Listing, utcnow
@@ -33,6 +34,26 @@ def test_an_upgrade_logs_each_migration_it_runs():
     )
     assert done.returncode == 0, done.stderr
     assert "Running upgrade" in done.stderr
+
+
+def test_an_upgrade_waits_for_one_already_running(database_url):
+    """The dashboard and the worker migrate at the same moment after a merge."""
+    argv = [sys.executable, "-m", "alembic", "upgrade", "head"]
+    env = {**os.environ, "DATABASE_URL": database_url, "PGOPTIONS": "-c lock_timeout=2000"}
+    engine = create_engine(database_url, poolclass=NullPool)
+
+    def upgrade():
+        return subprocess.run(  # noqa: S603 - this interpreter, fixed arguments
+            argv, env=env, capture_output=True, text=True, timeout=120
+        )
+
+    with engine.begin() as connection:
+        connection.execute(text("SELECT pg_advisory_xact_lock(8010)"))
+        held = upgrade()
+    assert held.returncode != 0
+    assert "lock timeout" in held.stderr
+    free = upgrade()
+    assert free.returncode == 0, free.stderr
 
 
 async def test_the_link_backfill_points_traderie_rows_at_their_own_listing(session):

@@ -59,6 +59,13 @@ terminal output — it scrolls away and buries the signal. Keep the terminal to 
 status line plus the artifact path; put everything needed to diagnose in the file.
 Write the artifact on failure too, not just success, and overwrite per run.
 
+### Deployment
+
+A merge deploys itself to the stack (`d2_trader/release.py`), migrations and locked
+dependencies included, so queue no rebuild for one. The exception is a change to
+`docker-compose.yml` or the `Dockerfile`: ship it with a `.devkit-queue/` task that runs
+`docker compose up -d --build` on the machine holding the stack.
+
 ### Docker subprocess calls
 
 - **`docker compose exec` must use `-T`** — without it a pseudo-TTY is allocated and

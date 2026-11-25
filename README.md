@@ -19,6 +19,12 @@ Then open <http://127.0.0.1:8010>. The first catalog sync takes about six minute
 because diablo2.io is fetched at one page a minute; until it finishes, no item can be
 added to a watchlist. `/sources` shows what each collector is doing.
 
+A merge then deploys itself: once this checkout fast-forwards, the dashboard and the
+worker each restart onto the new code (the worker after the job in hand), installing
+changed dependencies and applying migrations first. Only the main checkout, on `main`, does
+this. A change to `docker-compose.yml`, the `Dockerfile` or `.env` still needs the command
+above; `d2_trader/release.py` says how the rest works.
+
 For development:
 
 ```bash

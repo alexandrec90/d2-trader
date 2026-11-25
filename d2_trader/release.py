@@ -1,0 +1,172 @@
+"""Deploys merged code: how a container starts, and how it knows to start again.
+
+    python -m d2_trader.release serve|worker   # what the stack's containers run
+    python -m d2_trader.release deps           # what the image build runs
+
+The containers mount the checkout, so a merge reaches their files, but a running process
+keeps what it imported. Each one therefore watches for `main` moving and exits when the
+code did too; `restart: unless-stopped` starts it again through `prepare`, which installs
+changed dependencies and applies migrations first.
+
+The trigger is the commit, not the files: an uncommitted edit or a feature branch in the
+checkout deploys nothing. Git moves the branch after it has written the files, so they are
+complete by then.
+
+Standard library only: this runs before a newly added dependency is installed.
+"""
+
+import hashlib
+import os
+import signal
+import subprocess
+import sys
+import threading
+from collections.abc import Callable
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+BRANCH = "refs/heads/main"
+CODE = ("d2_trader", "migrations", "alembic.ini", "pyproject.toml", "uv.lock")
+DEPENDENCIES = ("pyproject.toml", "uv.lock")
+# In the container's own filesystem, beside the packages it describes.
+STAMP = Path("/var/tmp/d2-trader-deps")  # noqa: S108 - a fixed path in a single-user container
+REQUIREMENTS = "/var/tmp/d2-trader-requirements.txt"  # noqa: S108 - as above
+# Set by `main` for the process it becomes. Unset, nothing watches: a host run, a test.
+RELEASE_ENV = "D2_TRADER_RELEASE"
+POLL_SECONDS = 30.0
+
+Run = Callable[[list[str]], object]
+
+
+def main_commit(root: Path = ROOT) -> str:
+    """The commit `main` is at, or "" when the checkout is not on it.
+
+    Reads git's files because the image has no git. A worktree's `.git` is a file, so a
+    worktree's own stack never deploys itself.
+    """
+    git = root / ".git"
+    try:
+        if (git / "HEAD").read_text(encoding="utf8").strip() != f"ref: {BRANCH}":
+            return ""
+        loose = git / BRANCH
+        if loose.is_file():
+            return loose.read_text(encoding="utf8").strip()
+        for line in (git / "packed-refs").read_text(encoding="utf8").splitlines():
+            sha, _, name = line.partition(" ")
+            if name == BRANCH:
+                return sha
+    except OSError:
+        pass
+    return ""
+
+
+def digest(root: Path, names: tuple[str, ...]) -> str:
+    """One hash over the files, and the folders' files, that `names` lists."""
+    total = hashlib.sha256()
+    for name in names:
+        top = root / name
+        files = sorted(top.rglob("*")) if top.is_dir() else [top]
+        for path in files:
+            if not path.is_file() or "__pycache__" in path.parts:
+                continue
+            total.update(path.relative_to(root).as_posix().encode() + b"\0")
+            total.update(hashlib.sha256(path.read_bytes()).digest())
+    return total.hexdigest()
+
+
+def current(root: Path = ROOT) -> str:
+    # The commit first: a merge landing between the two reads is then seen as a new commit.
+    commit = main_commit(root)
+    return f"{commit}:{digest(root, CODE)}"
+
+
+class Watch:
+    """Says when `main` has moved to different code than this process started on."""
+
+    def __init__(self, release: str, root: Path = ROOT) -> None:
+        self.commit, _, self.code = release.partition(":")
+        self.root = root
+
+    def stale(self) -> bool:
+        if not self.code:
+            return False
+        commit = main_commit(self.root)
+        if not commit or commit == self.commit:
+            return False
+        try:
+            code = digest(self.root, CODE)
+        except OSError:
+            return False  # a file went while it was read; the next look settles it
+        if code != self.code:
+            return True
+        self.commit = commit  # a merge that touched no code
+        return False
+
+
+def started_release() -> Watch:
+    return Watch(os.environ.get(RELEASE_ENV, ""))
+
+
+def terminate_self() -> None:
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+def watch_in_background(
+    watch: Watch,
+    stop: Callable[[], None] = terminate_self,
+    interval: float = POLL_SECONDS,
+) -> threading.Thread | None:
+    """Call `stop` once the release is stale. None when this process is not deployed."""
+    if not watch.code:
+        return None
+    pause = threading.Event()
+
+    def look() -> None:
+        while not watch.stale():
+            pause.wait(interval)
+        stop()
+
+    thread = threading.Thread(target=look, name="release-watch", daemon=True)
+    thread.start()
+    return thread
+
+
+def run_checked(argv: list[str]) -> None:
+    subprocess.run(argv, cwd=ROOT, check=True)  # noqa: S603 - fixed arguments, no shell
+
+
+def install_dependencies(run: Run = run_checked, root: Path = ROOT, stamp: Path = STAMP) -> bool:
+    """Install what `uv.lock` pins, unless this container already has it."""
+    wanted = digest(root, DEPENDENCIES)
+    if stamp.is_file() and stamp.read_text(encoding="utf8") == wanted:
+        return False
+    export = ["uv", "export", "--frozen", "--no-emit-project", "--extra", "dev", "--quiet"]
+    run([*export, "--output-file", REQUIREMENTS])
+    run(["uv", "pip", "install", "--system", "--no-cache", "-r", REQUIREMENTS])
+    stamp.write_text(wanted, encoding="utf8")  # last, so a failed install is tried again
+    return True
+
+
+def prepare(run: Run = run_checked, root: Path = ROOT, stamp: Path = STAMP) -> None:
+    install_dependencies(run, root, stamp)
+    run([sys.executable, "-m", "alembic", "upgrade", "head"])
+
+
+def main(argv: list[str]) -> int:
+    if argv == ["deps"]:
+        install_dependencies()
+        return 0
+    if argv not in (["serve"], ["worker"]):
+        print("usage: python -m d2_trader.release serve|worker|deps", file=sys.stderr)
+        return 2
+    # Before `prepare`: a merge landing during it must still count as new.
+    os.environ[RELEASE_ENV] = current()
+    prepare()
+    os.execv(  # noqa: S606 - fixed arguments, no shell wanted
+        sys.executable, [sys.executable, "-m", "d2_trader", *argv]
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
