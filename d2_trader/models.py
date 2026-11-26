@@ -146,6 +146,19 @@ class CurrencyRate(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
 
+class Holding(Base):
+    """How many of a rune or good the operator holds in one market, for the Trade up page."""
+
+    __tablename__ = "holdings"
+    __table_args__ = (UniqueConstraint("market_id", "currency"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    market_id: Mapped[int] = mapped_column(ForeignKey("markets.id", ondelete="CASCADE"))
+    currency: Mapped[str] = mapped_column(String(40))
+    quantity: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
 class SeasonRow(Base):
     __tablename__ = "seasons"
 
