@@ -233,7 +233,9 @@ def format_holdings(held: Mapping[str, float]) -> str:
     return ", ".join(f"{held[c]:g} {display_name(c)}" for c in order if held.get(c))
 
 
-def bait_floors(rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float]) -> dict[str, float]:
+def bait_floors(
+    rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float]
+) -> dict[str, float]:
     """Each rune's lowest honest price in Ist: below it, an offer is bait (as `rank_asks`)."""
     floors = {}
     for rune, asks in offers_by_rune(rows, rates).items():

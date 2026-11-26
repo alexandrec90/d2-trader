@@ -304,7 +304,12 @@ def test_paying_more_than_the_fair_margin_is_left_out():
         [("Pul", bid([[["ist", 1.0], ["mystery charm", 1.0]]], quantity=3))],
         [("Pul", bid([[["lem", 1.0]]], quantity=3))],  # Pays with a lower rune.
         [("Ist", ask([[["pul", 0.0]]]))],
-        [("Ist", Listing(kind="sold", alternatives=[[["pul", 3.0]]], quantity=1, last_seen_at=NOW))],
+        [
+            (
+                "Ist",
+                Listing(kind="sold", alternatives=[[["pul", 3.0]]], quantity=1, last_seen_at=NOW),
+            )
+        ],
     ],
 )
 def test_what_is_not_a_trade_up_into_a_higher_rune_is_left_out(rows):
@@ -352,7 +357,11 @@ def test_each_alternative_is_its_own_trade_up():
 
 
 def test_holdings_keep_only_what_they_can_pay_for():
-    rows = [("Ist", ask([[["pul", 3.0]]])), ("Lo", ask([[["ist", 5.0]]])), ("Ohm", ask([[["vex", 1.0], ["pul", 2.0]]]))]
+    rows = [
+        ("Ist", ask([[["pul", 3.0]]])),
+        ("Lo", ask([[["ist", 5.0]]])),
+        ("Ohm", ask([[["vex", 1.0], ["pul", 2.0]]])),
+    ]
     assert up(rows, {"pul": 15}) == [([("ist", 1.0)], [("pul", 3.0)])]
     assert up(rows, {"pul": 2, "vex": 4}) == [([("ohm", 1.0)], [("vex", 1.0), ("pul", 2.0)])]
     assert up(rows, {}) == []

@@ -166,7 +166,12 @@ async def test_the_holdings_form_keeps_the_market(client, sessions):
     await store_trade_up_offers(sessions)
     page = (await client.get("/runes")).text
     form = page[page.index('<form method="get" action="/runes"') : page.index("</form>")]
-    for name, value in [("platform", "PC"), ("mode", "softcore"), ("ladder", "true"), ("version", "rotw")]:
+    for name, value in [
+        ("platform", "PC"),
+        ("mode", "softcore"),
+        ("ladder", "true"),
+        ("version", "rotw"),
+    ]:
         assert f'name="{name}" value="{value}"' in form
 
 
