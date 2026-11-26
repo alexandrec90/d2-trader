@@ -89,8 +89,11 @@ here is a fork that will disagree with it the first time either is edited.
   and `NULLS NOT DISTINCT`. `conftest.py` applies migrations once per run, and each test
   runs inside a rolled-back transaction. Start one with `docker compose up -d db`.
 - **Mock sites with `httpx.MockTransport`**, passed to the collector as `transport`.
-- **The `local` marker reaches live sites** and is deselected by `addopts`; only
-  `scripts/e2e.py` selects it, nightly, to catch a site changing its markup.
+- **The `local` and `ci_e2e` markers reach live sites** and `addopts` deselects both;
+  only `scripts/e2e.py` selects them, to catch a site changing its markup. `ci_e2e`
+  (`--ci`) is what a hosted runner can fetch, run by the PR Gate's `E2E` job on the
+  default branch; `local` is what must come from this workstation, nightly.
+  `tests/test_live_sites.py`'s docstring says which site is which and why.
 - **No test or tier may reach Traderie or d2jsp.** The collector reaches Traderie because
   the operator chose that; an unattended test tier is not the collector. Traderie's tests
   use saved response shapes.
