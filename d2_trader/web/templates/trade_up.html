@@ -24,7 +24,8 @@
     <input type="hidden" name="ladder" value="{{ 'true' if market.ladder else 'false' }}">
     <input type="hidden" name="version" value="{{ market.game_version }}">
     {% for g in groups %}
-    <details class="holding-group" {% if not g.folded %}open{% endif %}>
+    {# Opened by the page, so it must not pause live updates as a hand-opened one does. #}
+    <details class="holding-group" {% if not g.folded %}open data-keeps-live{% endif %}>
       <summary>{{ g.title }}</summary>
       <div class="holding-grid">
         {% for currency, name, count in g.rows %}

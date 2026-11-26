@@ -59,6 +59,14 @@ async def test_only_the_open_tab_is_marked_current(client, path):
     assert nav.count("aria-current") == 1
 
 
+async def test_only_a_section_opened_by_hand_pauses_live_updates(client):
+    """A `<details>` the page renders open carries `data-keeps-live`; the busy check
+    must skip it, or such a page never redraws."""
+    script = (await client.get("/static/app.js")).text
+    assert 'main details[open]:not([data-keeps-live])' in script
+    assert 'querySelector("main details[open]")' not in script
+
+
 async def test_the_stylesheet_marks_the_open_tab(client):
     assert ".top nav a[aria-current]" in (await client.get("/static/app.css")).text
 

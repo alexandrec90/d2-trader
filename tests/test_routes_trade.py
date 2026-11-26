@@ -98,8 +98,26 @@ async def test_the_form_shows_what_is_saved(client, sessions):
     assert re.search(r'name="held:perfect amethyst" value="2"', page)
     assert re.search(r'name="held:ber" value=""', page)
     # The goods family with something held opens; one with nothing stays folded.
-    assert re.search(r'<details class="holding-group" open>\s*<summary>Gems</summary>', page)
+    assert re.search(r'<details class="holding-group" open[^>]*>\s*<summary>Gems</summary>', page)
     assert re.search(r'<details class="holding-group" >\s*<summary>Keys</summary>', page)
+
+
+async def test_a_group_the_page_opens_does_not_pause_live_updates(client, sessions):
+    """Regression: the Runes group is always open, and any open <details> paused the live
+    redraw, so the page sat at "update waiting" until reloaded by hand."""
+    await hold(sessions, {"perfect amethyst": 2})
+    page = (await client.get("/trade-up")).text
+    opened = re.findall(r'<details class="holding-group" ([^>]*)>\s*<summary>([^<]+)<', page)
+    by_title = {title: attrs for attrs, title in opened}
+    assert by_title["Runes"] == "open data-keeps-live"
+    assert by_title["Gems"] == "open data-keeps-live"
+    assert by_title["Keys"] == ""  # Folded: one opened by hand still pauses.
+
+
+async def test_saving_holdings_tells_an_open_page_to_redraw(client):
+    before = (await client.get("/api/live")).json()["version"]
+    await client.post("/trade-up/holdings", data={**MARKET_FIELDS, f"{FIELD}pul": "15"})
+    assert (await client.get("/api/live")).json()["version"] != before
 
 
 async def test_the_form_saves_and_comes_back_to_its_market(client, sessions):
