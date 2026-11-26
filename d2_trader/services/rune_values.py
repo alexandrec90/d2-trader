@@ -253,30 +253,40 @@ def _sides(rune: str, listing: Listing) -> Iterable[tuple[Alternative, Alternati
         yield (lot, other) if listing.kind == "ask" else (other, lot)
 
 
-def _trade_up(
-    listing: Listing,
-    get: Alternative,
-    pay: Alternative,
-    rates: Mapping[str, float],
-    floors: Mapping[str, float],
-    have: Mapping[str, float] | None,
-    margin: float,
-) -> TradeUp | None:
-    """The offer as a trade up, or None if it is not one, not fair, bait or unaffordable.
+@dataclass(frozen=True)
+class _Terms:
+    """What every offer in one `trade_ups` call is judged against."""
 
-    Goods may ride along on either side; the runes are what must climb.
-    """
-    lots = [*get, *pay]
-    if any(c not in TRADED or c not in rates or q <= 0 for c, q in lots):
+    rates: Mapping[str, float]
+    floors: Mapping[str, float]
+    have: Mapping[str, float] | None
+    margin: float
+
+
+def _climbs(get: Alternative, pay: Alternative, rates: Mapping[str, float]) -> str | None:
+    """The best rune received, if every lot is valued and every rune paid is worth less."""
+    if any(c not in TRADED or c not in rates or q <= 0 for c, q in [*get, *pay]):
         return None
     got = [c for c, _ in get if c in RUNE_SET]
     paid = [c for c, _ in pay if c in RUNE_SET]
     if not got or not paid:
         return None
     top = max(got, key=rates.__getitem__)
-    if any(rates[c] >= rates[top] for c in paid):
+    return None if any(rates[c] >= rates[top] for c in paid) else top
+
+
+def _trade_up(
+    listing: Listing, get: Alternative, pay: Alternative, terms: _Terms
+) -> TradeUp | None:
+    """The offer as a trade up, or None if it is not one, not fair, bait or unaffordable.
+
+    Goods may ride along on either side; the runes are what must climb.
+    """
+    rates = terms.rates
+    top = _climbs(get, pay, rates)
+    if top is None:
         return None
-    if have is not None and any(q > have.get(c, 0) for c, q in pay):
+    if terms.have is not None and any(q > terms.have.get(c, 0) for c, q in pay):
         return None
     worth, cost = alternative_value(get, rates), alternative_value(pay, rates)
     if not worth or cost is None:
@@ -284,7 +294,7 @@ def _trade_up(
     ratio = cost / worth
     # The floor is the cheapest honest offer itself, priced another way round: a hair of
     # rounding must not push that offer under its own floor.
-    if ratio > 1 + margin or rates[top] * ratio < floors.get(top, 0) * (1 - 1e-9):
+    if ratio > 1 + terms.margin or rates[top] * ratio < terms.floors.get(top, 0) * (1 - 1e-9):
         return None
     return TradeUp(listing, get, pay, ratio)
 
@@ -307,13 +317,13 @@ def trade_ups(
     out. Best ratio first, then the highest rune.
     """
     rows = list(rows)
-    floors = bait_floors(rows, rates)
+    terms = _Terms(rates, bait_floors(rows, rates), have, margin)
     found = []
     for name, listing in rows:
         if listing.kind not in ("ask", "bid"):
             continue
         for get, pay in _sides(normalize_currency(name), listing):
-            offer = _trade_up(listing, get, pay, rates, floors, have, margin)
+            offer = _trade_up(listing, get, pay, terms)
             if offer is not None:
                 found.append(offer)
     found.sort(key=lambda t: (t.ratio, -max(rates[c] for c, _ in t.get)))

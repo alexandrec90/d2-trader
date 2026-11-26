@@ -154,7 +154,8 @@ RATES = {**SEED_RATES, "lo": 5.0, "ohm": 3.0, "ber": 14.0}
 
 
 def ask(alternatives, quantity=1, seen=NOW):
-    return Listing(alternatives=alternatives, quantity=quantity, last_seen_at=seen)
+    # `kind` has no default: a stored row always names it, and `trade_ups` reads it.
+    return Listing(kind="ask", alternatives=alternatives, quantity=quantity, last_seen_at=seen)
 
 
 def test_asks_are_ranked_cheapest_first_per_rune():
