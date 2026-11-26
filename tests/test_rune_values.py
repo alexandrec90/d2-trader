@@ -264,3 +264,17 @@ async def test_only_asks_still_seen_in_this_market_are_active(session):
     await store_listings(session, lo.id, [gone], NOW - timedelta(hours=30))
     found = await active_asks(session, LADDER, NOW - timedelta(hours=13))
     assert [(name, row.external_id) for name, row in found] == [("Lo", "x1")]
+
+
+async def test_an_ask_still_up_but_posted_too_long_ago_is_not_active(session):
+    """Regression: a Traderie ask posted 271 days ago, still up, was listed as an offer."""
+    lo = await rune_item(session, "lo")
+    fresh = sold(1, [[("ist", 5.0)]], NOW - timedelta(hours=2), kind="ask")
+    ancient = sold(2, [[("ist", 4.0)]], NOW - timedelta(days=271), kind="ask")
+    await store_listings(session, lo.id, [fresh, ancient], NOW)
+    posted_since = NOW - timedelta(hours=24)
+    found = await active_asks(session, LADDER, NOW - timedelta(hours=1), posted_since=posted_since)
+    assert [row.external_id for _, row in found] == ["x1"]
+    # Without a posting floor, both are still up.
+    everything = await active_asks(session, LADDER, NOW - timedelta(hours=1))
+    assert sorted(row.external_id for _, row in everything) == ["x1", "x2"]

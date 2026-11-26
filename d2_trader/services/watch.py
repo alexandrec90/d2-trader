@@ -78,7 +78,8 @@ async def view_for(
     seasons = await load_seasons(session)
     valuation = await valuation_for(session, watch.market_id, wanted.market, seasons, now)
     stale_after = timedelta(hours=settings.ask_stale_hours)
-    view = await market_view(session, wanted, state, valuation, now, stale_after)
+    max_age = timedelta(hours=settings.listing_max_age_hours)
+    view = await market_view(session, wanted, state, valuation, now, stale_after, max_age)
     return view, valuation
 
 

@@ -116,17 +116,22 @@ def to_quotes(listings: list[Listing], valuation: Valuation) -> list[Quote]:
 
 
 def counts_now(
-    listing: Listing, window_start: datetime, now: datetime, stale_after: timedelta
+    listing: Listing,
+    window_start: datetime,
+    now: datetime,
+    stale_after: timedelta,
+    max_age: timedelta,
 ) -> bool:
     """Whether a listing describes today's market.
 
     A sale is history, so it counts while it is recent. An ask or a bid a collector just
-    saw is still up, so it counts however long ago it was posted. A pasted one has nobody
-    to say it is still up, so it is treated like history.
+    saw is still up, but counts only while it is younger than `max_age`: one posted months
+    ago and never touched is a price the market has walked away from. A pasted one has
+    nobody to say it is still up, so it is treated like history.
     """
     if listing.kind == "sold" or listing.source not in CONFIRMED_SOURCES:
         return listing.observed_at >= window_start
-    return now - listing.last_seen_at <= stale_after
+    return now - listing.last_seen_at <= stale_after and now - listing.observed_at <= max_age
 
 
 async def market_view(
@@ -136,6 +141,7 @@ async def market_view(
     valuation: Valuation,
     now: datetime,
     stale_after: timedelta,
+    max_age: timedelta,
 ) -> MarketView:
     """Today's market for one item: only quotes from inside this season's window."""
     ladder = wanted.market.ladder
@@ -144,7 +150,7 @@ async def market_view(
     # a listing that is somehow still up.
     floor = season_floor(state, ladder) or now - timedelta(days=OPEN_LISTING_DAYS)
     rows = await _listings(session, wanted, min(floor, window.start))
-    live = [row for row in rows if counts_now(row, window.start, now, stale_after)]
+    live = [row for row in rows if counts_now(row, window.start, now, stale_after, max_age)]
     quotes = to_quotes(live, valuation)
     # The estimate looks at every sale since the floor, not just the window: a quiet
     # week should widen the interval, not empty it.

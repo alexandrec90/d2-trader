@@ -177,8 +177,10 @@ async def active_asks(
     market: MarketKey,
     seen_since: datetime,
     names: Sequence[str] | None = None,
+    posted_since: datetime | None = None,
 ) -> list[tuple[str, Listing]]:
-    """Every ask and bid for the named items (runes, if none) seen up since `seen_since`."""
+    """Every ask and bid for the named items (runes, if none) seen up since `seen_since`
+    and, given `posted_since`, posted or last edited since then."""
     query = (
         select(Item.name, Listing)
         .join(Item, Item.id == Listing.item_id)
@@ -189,6 +191,8 @@ async def active_asks(
             Listing.last_seen_at >= seen_since,
         )
     )
+    if posted_since is not None:
+        query = query.where(Listing.observed_at >= posted_since)
     return [(name, listing) for name, listing in (await session.execute(query)).all()]
 
 

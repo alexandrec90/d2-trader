@@ -23,11 +23,13 @@ from d2_trader.services.pricing import (
 )
 
 STALE = timedelta(hours=6)
+MAX_AGE = timedelta(hours=24)
 
 
 async def view(session, item, market, state, now=NOW, ethereal=None) -> MarketView:
     wanted = PriceQuery(item.id, market, ethereal)
-    return await market_view(session, wanted, state, Valuation(dict(SEED_RATES)), now, STALE)
+    valuation = Valuation(dict(SEED_RATES))
+    return await market_view(session, wanted, state, valuation, now, STALE, MAX_AGE)
 
 
 async def test_storing_twice_keeps_one_row_and_refreshes_last_seen(session, item, make_listing):
@@ -134,14 +136,26 @@ async def test_an_ask_nobody_has_confirmed_expires(session, item, market, make_l
     assert (await view(session, item, market, mid_season)).summary.ask_count == 0
 
 
-async def test_an_old_offer_that_is_still_up_counts(
+async def test_an_offer_posted_within_the_max_age_counts(
     session, item, market, make_listing, mid_season
 ):
-    """Regression: a buy request posted weeks ago but seen just now was left out."""
-    posted = NOW - timedelta(days=30)
+    """A bid posted hours ago and seen just now is today's market."""
+    posted = NOW - timedelta(hours=20)
     listing = make_listing("bid", 5, kind="bid", observed_at=posted)
     await store_listings(session, item.id, [listing], NOW)
     assert (await view(session, item, market, mid_season)).summary.highest_bid == 5
+
+
+async def test_an_offer_older_than_the_max_age_does_not_count_though_still_up(
+    session, item, market, make_listing, mid_season
+):
+    """Regression: a Traderie ask posted 271 days ago, still up, was shown as live."""
+    posted = NOW - timedelta(days=271)
+    ask = make_listing("ask", 5, kind="ask", observed_at=posted)
+    bid = make_listing("bid", 5, kind="bid", observed_at=NOW - timedelta(days=2))
+    await store_listings(session, item.id, [ask, bid], NOW)
+    summary = (await view(session, item, market, mid_season)).summary
+    assert (summary.ask_count, summary.highest_bid) == (0, None)
 
 
 async def test_a_listing_still_up_from_last_season_does_not_count(
@@ -261,15 +275,22 @@ def test_what_counts_as_the_market_now():
     def listing(kind, source, observed, seen=fresh):
         return Listing(kind=kind, source=source, observed_at=observed, last_seen_at=seen)
 
+    def counts(row):
+        return counts_now(row, start, NOW, STALE, MAX_AGE)
+
     # A sale counts while it is inside the window, however recently it was seen.
-    assert counts_now(listing("sold", "traderie", NOW), start, NOW, STALE)
-    assert not counts_now(listing("sold", "traderie", old), start, NOW, STALE)
-    # A collected ask or bid counts while it is still up, however long ago it was posted.
-    assert counts_now(listing("ask", "traderie", old), start, NOW, STALE)
-    assert not counts_now(listing("ask", "traderie", NOW, seen=old), start, NOW, STALE)
+    assert counts(listing("sold", "traderie", NOW))
+    assert not counts(listing("sold", "traderie", old))
+    # A collected ask or bid counts while it is still up and younger than the max age.
+    assert counts(listing("ask", "traderie", NOW - timedelta(hours=23)))
+    assert counts(listing("bid", "traderie", NOW - MAX_AGE))
+    assert not counts(listing("ask", "traderie", NOW - MAX_AGE - timedelta(minutes=1)))
+    assert not counts(listing("bid", "traderie", old))
+    assert not counts(listing("ask", "traderie", NOW, seen=old))
     # A pasted one has no collector to say it is still up, so the window decides.
-    assert counts_now(listing("ask", "d2jsp", NOW, seen=old), start, NOW, STALE)
-    assert not counts_now(listing("ask", "d2jsp", old), start, NOW, STALE)
+    assert counts(listing("ask", "d2jsp", NOW, seen=old))
+    assert counts(listing("ask", "d2jsp", NOW - timedelta(days=2)))
+    assert not counts(listing("ask", "d2jsp", old))
 
 
 async def test_history_crosses_seasons_for_the_chart(session, item, market, make_listing):
