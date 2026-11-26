@@ -61,6 +61,11 @@ def test_each_kind_asks_for_its_own_listings():
     assert "completed" not in listing_params("1", MARKET, "ask")
 
 
+def test_an_ask_leaves_out_they_want_listings():
+    """Unfiltered, Traderie returned listing 1002606574735, which wants a Ber, as a Ber ask."""
+    assert listing_params("1", MARKET, "ask")["selling"] == "true"
+
+
 def test_parse_reads_a_listing():
     [listing] = parse_listings({"listings": [raw_listing()]}, MARKET, "ask")
     assert listing.external_id == "1002479569827"
