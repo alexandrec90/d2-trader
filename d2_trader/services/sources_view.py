@@ -14,6 +14,7 @@ JOB_LABELS = {
     "diablo2io": "Prices: diablo2.io",
     "traderie": "Prices: Traderie",
     "rates": "Rune rates (Traderie)",
+    "goods": "Gems, shards, keys and the like (Traderie)",
 }
 
 

@@ -68,7 +68,7 @@ def test_outcomes_keep_refusals_distinct_from_faults():
 
 def test_every_source_has_a_job(settings):
     names = {spec.name for spec in job_specs(settings)}
-    assert names == {"seasons", "catalog", "diablo2io", "traderie", "rates"}
+    assert names == {"seasons", "catalog", "diablo2io", "traderie", "rates", "goods"}
 
 
 def test_jobs_that_move_valuations_recheck_alerts(settings):

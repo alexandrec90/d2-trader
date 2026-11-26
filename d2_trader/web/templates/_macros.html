@@ -28,8 +28,33 @@
 {% endmacro %}
 
 {% macro listing_price(listing) -%}
-{% for alternative in listing.alternatives %}{% if not loop.first %} <span class="muted">or</span> {% endif %}{% for lot in alternative %}{% if not loop.first %} + {% endif %}{{ "%g" | format(lot[1]) }} {{ lot[0].title() }}{% endfor %}{% endfor %}{% if listing.quantity > 1 %} <span class="muted">for {{ listing.quantity }}</span>{% endif %}
+{% for alternative in listing.alternatives %}{% if not loop.first %} <span class="muted">or</span> {% endif %}{% for lot in alternative %}{% if not loop.first %} + {% endif %}{{ "%g" | format(lot[1]) }} {{ currency_name(lot[0]) }}{% endfor %}{% endfor %}{% if listing.quantity > 1 %} <span class="muted">for {{ listing.quantity }}</span>{% endif %}
 {%- endmacro %}
+
+{% macro offer_price(ask) -%}
+{% if ask.wanted %}{{ ask.listing.quantity }} {{ currency_name(ask.wanted) }} for {% for lot in ask.offered %}{% if not loop.first %} + {% endif %}{{ "%g" | format(lot[1]) }} {{ currency_name(lot[0]) }}{% endfor %} <span class="muted">(they want)</span>{% else %}{{ listing_price(ask.listing) }}{% endif %}
+{%- endmacro %}
+
+{% macro offers_table(a, estimate, every) %}
+{% if a and a.cheapest %}
+<div class="scroll"><table class="asks">
+  <caption class="muted">Cheapest {{ a.cheapest | length }} offers, as of {{ humanize(a.seen_at, now) }}{% if a.hidden %} · {{ a.hidden }} bait-priced hidden{% endif %}</caption>
+  <thead><tr><th>You pay</th><th class="num">Ist each</th><th class="num">vs estimate</th><th>Listed</th></tr></thead>
+  <tbody>
+    {% for ask in a.cheapest %}
+    <tr>
+      <td>{% if ask.listing.url %}<a href="{{ ask.listing.url }}" rel="noreferrer">{{ offer_price(ask) }}</a>{% else %}{{ offer_price(ask) }}{% endif %}</td>
+      <td class="num">{{ "%.3g" | format(ask.value) }}</td>
+      <td class="num">{{ "%+.0f%%" | format((ask.value / estimate - 1) * 100) }}</td>
+      <td class="muted">{{ humanize(ask.listing.observed_at, now) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+  <p class="muted">No open offers seen in the last {{ every }}.</p>
+{% endif %}
+{% endmacro %}
 
 {% macro market_fields(key) %}
 <label>Platform

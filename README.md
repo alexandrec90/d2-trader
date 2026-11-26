@@ -160,13 +160,27 @@ Under each chart are the rune's 10 cheapest open offers, with how far each sits 
 estimate; bait prices are hidden and counted. An offer is somebody who has the rune, at
 their cheapest alternative, or somebody who wants another rune and pays in this one
 ("wants 2 Ist, has 5 Um" sells Um at 0.4 Ist). A bundle of runes is listed under its
-most valuable one, at the bundle's discount; a bid paid in anything else is left out.
+most valuable one, at the bundle's discount; a bid paid in anything but runes and measured goods is left out.
 The rates job fetches them with the trades, so they are as fresh as its last run.
 `python -m d2_trader rune-value lo` prints one rune's value today with its 95% interval
 and its last two weeks (`--mode`, `--non-ladder`, `--version` pick the market). Checked on
 simulated rune markets (`tests/test_rune_model.py`), the interval held the true value on
 93% of days with clean trades and 89% with one trade in twenty a bait price. Forum gold
 is measured against these values, as above.
+
+**Other currencies** (worldstone shards, keys, perfect gems, statues, essences; the list
+is `GOODS_BY_FAMILY` in `currency.py`) are valued in `goods.py` against the runes, after
+the runes are fitted: "Ist for 20 Deep Worldstone Shards" reads as 0.05 Ist a shard, at
+that day's rune values. A good's readings feed the price model below. Sales offering
+alternatives or paid in a mix are left out. Every `GOODS_POLL_HOURS` (3) a job collects each
+good's sales, asks and bids, about 90 requests and 11 minutes a market. A good
+with fewer than 5 trades is charted, but values nothing else.
+
+The **Currencies** page charts each good with its cheapest offers, and checks a deal: type
+what you give and what you get ("20 deep shards", "1 ist") for the gain in value, its 95%
+interval and the break-even amount. Under 5% either way is fair; a gain the interval
+cannot tell from zero is too close to call. A rune offered for goods is ranked on the
+Runes page, under that rune.
 
 **The estimated price** (and the forum gold rate) come from one model, in `trend.py`.
 Prices are not independent from day to day: today's is yesterday's plus a step, and the
@@ -228,6 +242,7 @@ d2_trader/               application code
   stats.py alerts.py     price ranges and alert decisions (pure)
   currency.py markets.py valuing prices in Ist, and what a market is (pure)
   trend.py rune_model.py one price over time; every rune's value at once (pure)
+  goods.py deals.py      other currencies through runes; is a trade good? (pure)
   sources/               one module per external site; http.py is the only HTTP path
   services/              everything that combines the database with the above
   web/                   the dashboard

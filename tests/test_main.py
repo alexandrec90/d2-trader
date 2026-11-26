@@ -18,7 +18,7 @@ def test_run_needs_a_real_job():
 
 
 def test_run_accepts_each_job():
-    for job in ("seasons", "catalog", "diablo2io", "traderie", "rates"):
+    for job in ("seasons", "catalog", "diablo2io", "traderie", "rates", "goods"):
         assert cli.build_parser().parse_args(["run", job]).job == job
 
 

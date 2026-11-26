@@ -91,6 +91,12 @@ def job_specs(settings: Settings) -> list[JobSpec]:
             collects_prices=True,
             enabled=traderie,
         ),
+        JobSpec(
+            "goods",
+            collector.collect_goods,
+            timedelta(hours=settings.goods_poll_hours),
+            enabled=traderie,
+        ),
     ]
 
 

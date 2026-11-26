@@ -267,12 +267,13 @@ def daily_medians(observed: list[tuple[date, float]]) -> dict[date, tuple[float,
 
 
 def _rune_rows(
-    path: list[PathPoint], medians: dict[date, tuple[float, int]], scale: Scale, ber: float
+    path: list[PathPoint], medians: dict[date, tuple[float, int]], scale: Scale, ber: float | None
 ) -> list[dict]:
     rows = []
     for p in path:
+        other = f"{p.value / ber:.3g} Ber" if ber else f"{1 / p.value:.3g} per Ist"
         lines = [
-            f"Estimate: {p.value:.3g} Ist ({p.value / ber:.3g} Ber)",
+            f"Estimate: {p.value:.3g} Ist ({other})",
             f"95% CI {p.low:.3g} to {p.high:.3g} Ist",
         ]
         if p.day in medians:
@@ -289,11 +290,13 @@ def rune_chart(
     observed: list[tuple[date, float]],
     seasons: list[Season],
     *,
-    ber: float,
+    ber: float | None,
     now: datetime,
     title: str,
 ) -> Chart | None:
-    """A rune's modelled value in Ist, its 95% band, and each day's median trade as a dot.
+    """A rune's (or good's) modelled value in Ist, its 95% band, and each day's median trade.
+
+    The tooltip also gives the value in Ber, or without `ber`, how many an Ist buys.
 
     A trade's dot is what it implied the rune was worth, with the other side valued at
     the model's estimate. A bait trade's dot can sit far off the scale; it is left out of

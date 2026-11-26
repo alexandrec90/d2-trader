@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from test_diablo2io import BANNER, page, sale
 from test_traderie import raw_listing
 
-from d2_trader.currency import SEED_RATES
+from d2_trader.currency import GOODS, SEED_RATES
 from d2_trader.markets import MarketKey
 from d2_trader.sources.traderie import RUNE_ITEM_IDS
 from d2_trader.models import Item, Listing, Notification, Watchlist
@@ -16,9 +16,10 @@ from d2_trader.services import collector
 from d2_trader.services.calendar import ensure_seed_seasons, load_seasons
 from d2_trader.services.catalog import get_or_create_market
 from d2_trader.services.collector import (
-    RUNE_KINDS,
+    LISTING_KINDS,
     SourceDisabled,
     Target,
+    measured_targets,
     shuffled,
     watched_items,
     watched_targets,
@@ -214,7 +215,7 @@ async def test_each_runes_sales_asks_and_bids_are_fetched_once(session, settings
     settings.traderie_enabled = True
     seen = []
     await collector.refresh_rates(session, settings, NOW, rune_listings({}, {}, seen))
-    assert sorted(seen) == sorted((i, k) for i in RUNE_ITEM_IDS.values() for k in RUNE_KINDS)
+    assert sorted(seen) == sorted((i, k) for i in RUNE_ITEM_IDS.values() for k in LISTING_KINDS)
 
 
 async def test_collect_rune_listings_stores_one_markets_listings(session, settings):
@@ -270,6 +271,69 @@ async def test_the_default_market_is_measured_before_anything_is_watched(session
     await collector.refresh_rates(session, settings, NOW, sales)
     default = await get_or_create_market(session, MarketKey())
     assert (await load_rates(session, default.id))["jah"] == pytest.approx(40, rel=0.05)
+
+
+def goods_api(seen, known=("Key of Hate",)):
+    """Traderie listing only `known` goods, each with one listing of every kind."""
+
+    def handler(request):
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nDisallow:\n")
+        query = parse_qs(request.url.query.decode())
+        seen.append((request.url.path.rsplit("/", 1)[-1], query))
+        if request.url.path.endswith("/items"):
+            name = query["search"][0]
+            found = [{"id": f"id-{name}", "name": name}] if name in known else []
+            return httpx.Response(200, json={"items": found})
+        return httpx.Response(200, json={"listings": [raw_listing()]})
+
+    return httpx.MockTransport(handler)
+
+
+async def test_goods_are_collected_for_the_default_market(session, settings):
+    settings.traderie_enabled = True
+    seen = []
+    assert await collector.collect_goods(session, settings, NOW, goods_api(seen)) == 3
+    kinds = set((await session.execute(select(Listing.kind))).scalars())
+    assert kinds == set(LISTING_KINDS)
+    item = (await session.execute(select(Item).where(Item.name == "Key of Hate"))).scalar_one()
+    assert item.traderie_id == "id-Key of Hate"
+    searches = [q["search"][0] for path, q in seen if path == "items"]
+    assert sorted(searches) == sorted(GOODS.values())  # Each looked up once, found or not.
+
+
+async def test_collect_goods_listings_counts_what_it_stored(session, settings):
+    async with collector._client(settings, 0, goods_api([])) as client:
+        assert await collector.collect_goods_listings(session, client, MarketKey(), NOW) == 3
+
+
+async def test_goods_make_no_requests_unless_traderie_is_enabled(session, settings):
+    seen = []
+    with pytest.raises(SourceDisabled, match="README"):
+        await collector.collect_goods(session, settings, NOW, goods_api(seen))
+    assert seen == []
+
+
+async def test_measured_targets_are_the_default_and_the_watched(session, watch, item):
+    hardcore = MarketKey(mode="hardcore")
+    await add_watch(session, watch.watchlist_id, item.id, hardcore, None)
+    markets = await measured_targets(session, NOW)
+    assert set(markets.values()) == {MarketKey(), hardcore}
+
+
+async def test_the_rates_job_stores_goods_values_too(session, settings):
+    settings.traderie_enabled = True
+    shards = [{"name": "Deep Worldstone Shard", "quantity": 20, "group": 0}]
+    sales = rune_sales(
+        {
+            "jah": [sold_for_ist(n, 20) for n in range(6)],
+            "ist": [raw_listing(id=f"g{n}", prices=shards) for n in range(6)],
+        }
+    )
+    await collector.refresh_rates(session, settings, NOW, sales)
+    default = await get_or_create_market(session, MarketKey())
+    rates = await load_rates(session, default.id)
+    assert rates["deep worldstone shard"] == pytest.approx(0.05, rel=0.05)
 
 
 def test_a_shuffled_list_has_the_same_things_in_it():

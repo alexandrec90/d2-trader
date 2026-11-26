@@ -60,7 +60,7 @@
     <tbody>
       {% for currency, value in rates.items() %}
       <tr>
-        <td>{{ currency.title() }}</td>
+        <td>{{ currency_name(currency) }}</td>
         <td class="num">{{ "%.3g" | format(value) }}</td>
         <td class="muted">{{ "manual" if currency in manual else "seed" }}</td>
         <td>{% if currency in manual %}<form method="post" action="/rates/{{ currency }}/clear"><button class="quiet">Clear</button></form>{% endif %}</td>
@@ -75,7 +75,7 @@
   <h2>Measured from trades</h2>
   <div class="scroll"><table>
     <thead><tr><th>Currency</th><th>Market id</th><th class="num">Worth (Ist)</th><th class="num">Trades</th></tr></thead>
-    <tbody>{% for row in derived %}<tr><td>{{ row.currency.title() }}</td><td>{{ row.market_id }}</td><td class="num">{{ "%.3g" | format(row.value_ist) }}</td><td class="num">{{ row.samples }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for row in derived %}<tr><td>{{ currency_name(row.currency) }}</td><td>{{ row.market_id }}</td><td class="num">{{ "%.3g" | format(row.value_ist) }}</td><td class="num">{{ row.samples }}</td></tr>{% endfor %}</tbody>
   </table></div>
 </section>
 {% endif %}

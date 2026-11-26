@@ -32,7 +32,8 @@ async def test_every_page_links_a_tab_icon_that_is_served(client):
 
 
 @pytest.mark.parametrize(
-    "path", ["/", "/seasons", "/import", "/runes", "/rates", "/sources", "/notifications"]
+    "path",
+    ["/", "/seasons", "/import", "/runes", "/currencies", "/rates", "/sources", "/notifications"],
 )
 async def test_only_the_open_tab_is_marked_current(client, path):
     page = (await client.get(path)).text
