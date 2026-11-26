@@ -2,6 +2,11 @@
 
     python -m d2_trader.release serve|worker   # what the stack's containers run
     python -m d2_trader.release deps           # what the image build runs
+    python -m d2_trader.release wait           # blocks until the dashboard serves main
+
+`wait` is the one call a session makes to see a merge live, in place of a loop that
+curls a page and sleeps: it returns once the dashboard's release (`/api/release`) runs
+the code the main checkout holds, and fails after `WAIT_SECONDS`.
 
 The containers mount the checkout, so a merge reaches their files, but a running process
 keeps what it imported. Each one therefore watches for `main` moving and exits when the
@@ -16,13 +21,17 @@ Standard library only: this runs before a newly added dependency is installed.
 """
 
 import hashlib
+import json
 import os
 import signal
 import subprocess
 import sys
 import threading
+import time
+import urllib.request
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 BRANCH = "refs/heads/main"
@@ -34,8 +43,21 @@ REQUIREMENTS = "/var/tmp/d2-trader-requirements.txt"  # noqa: S108 - as above
 # Set by `main` for the process it becomes. Unset, nothing watches: a host run, a test.
 RELEASE_ENV = "D2_TRADER_RELEASE"
 POLL_SECONDS = 30.0
+# The watch's own interval, a restart and `prepare`'s migrations, with room to spare.
+WAIT_SECONDS = 600.0
+WAIT_INTERVAL = 5.0
+DASHBOARD = "http://127.0.0.1:8010"
 
 Run = Callable[[list[str]], object]
+Fetch = Callable[[str], str]
+
+
+class Clock(Protocol):
+    """What `wait_for_live` reads time through: the `time` module, or a test's."""
+
+    def monotonic(self) -> float: ...
+
+    def sleep(self, seconds: float, /) -> None: ...
 
 
 def main_commit(root: Path = ROOT) -> str:
@@ -152,12 +174,68 @@ def prepare(run: Run = run_checked, root: Path = ROOT, stamp: Path = STAMP) -> N
     run([sys.executable, "-m", "alembic", "upgrade", "head"])
 
 
+def main_checkout(root: Path = ROOT) -> Path:
+    """The checkout the stack mounts: `root` itself, or the one a worktree at `root` is of.
+
+    A worktree's `.git` file names `<main>/.git/worktrees/<name>`.
+    """
+    git = root / ".git"
+    if not git.is_file():
+        return root
+    _, _, gitdir = git.read_text(encoding="utf8").strip().partition("gitdir:")
+    path = Path(gitdir.strip())
+    if not path.is_absolute():
+        path = root / path
+    return path.resolve().parents[2]
+
+
+def fetch(url: str) -> str:
+    with urllib.request.urlopen(url, timeout=10) as reply:  # noqa: S310 - a fixed local URL
+        return reply.read().decode("utf8")
+
+
+def served_release(base: str = DASHBOARD, get: Fetch = fetch) -> str | None:
+    """What the dashboard reports it runs: "" when nothing deployed it, None while down."""
+    try:
+        return str(json.loads(get(f"{base}/api/release")).get("release", ""))
+    except (OSError, ValueError, AttributeError):
+        return None  # restarting, or a dashboard from before this endpoint existed
+
+
+def wait_for_live(
+    root: Path = ROOT,
+    base: str = DASHBOARD,
+    get: Fetch = fetch,
+    timeout: float = WAIT_SECONDS,
+    interval: float = WAIT_INTERVAL,
+    clock: Clock = time,
+) -> int:
+    """0 once the dashboard runs the main checkout's code; 1 on timeout; 2 if undeployed."""
+    checkout = main_checkout(root)
+    wanted = digest(checkout, CODE)
+    deadline = clock.monotonic() + timeout
+    while True:
+        served = served_release(base, get)
+        if served == "":
+            print(f"{base} was not started by a release, so no merge deploys it")
+            return 2
+        if served is not None and served.partition(":")[2] == wanted:
+            print(f"{base} serves {checkout}'s main at {main_commit(checkout)[:10]}")
+            return 0
+        if clock.monotonic() >= deadline:
+            print(f"{base} still did not serve {checkout}'s main after {timeout:.0f}s")
+            return 1
+        clock.sleep(interval)
+
+
 def main(argv: list[str]) -> int:
     if argv == ["deps"]:
         install_dependencies()
         return 0
+    if argv == ["wait"]:
+        return wait_for_live()
     if argv not in (["serve"], ["worker"]):
-        print("usage: python -m d2_trader.release serve|worker|deps", file=sys.stderr)
+        print("usage: python -m d2_trader.release serve|worker|deps|wait", file=sys.stderr)
         return 2
     # Before `prepare`: a merge landing during it must still count as new.
     os.environ[RELEASE_ENV] = current()

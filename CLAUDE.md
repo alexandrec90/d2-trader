@@ -66,6 +66,10 @@ dependencies included, so queue no rebuild for one. The exception is a change to
 `docker-compose.yml` or the `Dockerfile`: ship it with a `.devkit-queue/` task that runs
 `docker compose up -d --build` on the machine holding the stack.
 
+To see a merge live, run `python -m d2_trader.release wait` once, with `run_in_background`,
+from any tree: it returns when the dashboard runs the main checkout's code, and its exit
+code says whether it did. Never a loop that curls a page and sleeps.
+
 ### Docker subprocess calls
 
 - **`docker compose exec` must use `-T`** — without it a pseudo-TTY is allocated and

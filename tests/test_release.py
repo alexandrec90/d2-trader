@@ -1,7 +1,9 @@
+import json
 import os
 import signal
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -188,6 +190,98 @@ def test_main_installs_for_the_image_build(monkeypatch):
 
 def test_main_refuses_anything_else():
     assert release.main(["nonsense"]) == 2
+
+
+def test_main_waits_for_the_deploy(monkeypatch):
+    monkeypatch.setattr(release, "wait_for_live", lambda: 7)
+    assert release.main(["wait"]) == 7
+
+
+def test_main_checkout_is_the_root_itself(checkout):
+    assert release.main_checkout(checkout) == checkout
+
+
+def test_main_checkout_of_a_worktree_is_the_checkout_it_was_cut_from(checkout, tmp_path):
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    gitdir = checkout / ".git/worktrees/tree"
+    gitdir.mkdir(parents=True)
+    (tree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf8")
+    assert release.main_checkout(tree) == checkout.resolve()
+
+
+def replies(*bodies):
+    """A fetch answering each call with the next body; an exception body is raised."""
+    queue = list(bodies)
+
+    def get(_url):
+        body = queue.pop(0)
+        if isinstance(body, Exception):
+            raise body
+        return body
+
+    return get
+
+
+def test_the_time_module_is_the_clock_a_wait_reads():
+    clock: release.Clock = time
+    assert release.wait_for_live.__defaults__[-1] is clock
+
+
+class Clock:
+    """A `release.Clock` whose sleep only moves its own time forward."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.pauses = []
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.pauses.append(seconds)
+        self.now += seconds
+
+
+def waiting(checkout, get, clock, timeout=60.0):
+    return release.wait_for_live(checkout, "http://dash", get, timeout, 5.0, clock)
+
+
+def test_fetch_reads_a_url(tmp_path):
+    page = tmp_path / "release.json"
+    page.write_text('{"release": "s:c"}', encoding="utf8")
+    assert release.fetch(page.as_uri()) == '{"release": "s:c"}'
+
+
+def test_served_release_reads_the_endpoint():
+    assert release.served_release("http://dash", replies('{"release": "s:c"}')) == "s:c"
+
+
+def test_served_release_is_none_while_the_dashboard_is_down():
+    assert release.served_release("http://dash", replies(OSError("refused"))) is None
+    assert release.served_release("http://dash", replies("<html>")) is None
+
+
+def test_wait_returns_once_the_dashboard_runs_the_checkouts_code(checkout, capsys):
+    live = json.dumps({"release": f"{NEW}:{release.digest(checkout, release.CODE)}"})
+    old = json.dumps({"release": f"{OLD}:before"})
+    clock = Clock()
+    get = replies(old, OSError("restarting"), live)
+    assert waiting(checkout, get, clock) == 0
+    assert clock.pauses == [5.0, 5.0]
+    assert OLD[:10] in capsys.readouterr().out
+
+
+def test_wait_gives_up_at_its_deadline(checkout, capsys):
+    clock = Clock()
+    get = replies(*[OSError("down")] * 20)
+    assert waiting(checkout, get, clock, timeout=12.0) == 1
+    assert "after 12s" in capsys.readouterr().out
+
+
+def test_wait_says_when_nothing_deploys_the_dashboard(checkout, capsys):
+    assert waiting(checkout, replies('{"release": ""}'), Clock()) == 2
+    assert "not started by a release" in capsys.readouterr().out
 
 
 def test_the_module_needs_nothing_installed():

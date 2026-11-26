@@ -1,5 +1,6 @@
 """Everything around the watchlists: inbox, calendar, rates, imports, source health."""
 
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from d2_trader.currency import SEED_RATES, normalize_currency
 from d2_trader.markets import MarketKey, d2jsp_forum_url
+from d2_trader.release import RELEASE_ENV
 from d2_trader.models import utcnow
 from d2_trader.seasons import typical_season_days
 from d2_trader.services.calendar import apply_date, current_state
@@ -55,6 +57,12 @@ async def live(session: Db) -> dict:
         "count": await unread_count(session),
         "latest": {"id": newest.id, "title": newest.title, "body": newest.body} if newest else None,
     }
+
+
+@router.get("/api/release")
+async def served_release() -> dict:
+    """The release this process started on, which `python -m d2_trader.release wait` reads."""
+    return {"release": os.environ.get(RELEASE_ENV, "")}
 
 
 @router.get("/seasons", response_class=HTMLResponse)
