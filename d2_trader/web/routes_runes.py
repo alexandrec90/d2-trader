@@ -110,11 +110,14 @@ PageMarket = Annotated[MarketKey, Depends(page_market)]
 async def open_offers(
     session: AsyncSession, market: MarketKey, settings: Settings, now: datetime
 ) -> list[tuple[str, Listing]]:
-    """Every rune and good on offer, as of each one's own job: its latest run still saw it."""
+    """Every rune and good on offer, as of each one's own job: its latest run still saw it,
+    and it was posted or edited inside `listing_max_age_hours`."""
     runes_since = now - timedelta(hours=settings.rates_poll_hours + 1)
     goods_since = now - timedelta(hours=settings.goods_poll_hours + 1)
-    runes = await active_asks(session, market, runes_since)
-    return runes + await active_asks(session, market, goods_since, list(GOODS))
+    posted_since = now - timedelta(hours=settings.listing_max_age_hours)
+    runes = await active_asks(session, market, runes_since, posted_since=posted_since)
+    goods = await active_asks(session, market, goods_since, list(GOODS), posted_since)
+    return runes + goods
 
 
 async def valuation_rates(

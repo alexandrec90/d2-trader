@@ -158,3 +158,14 @@ async def test_offers_are_open_as_of_each_kinds_own_job(session, settings, make_
     await store_market(session, make_listing, now - timedelta(hours=3))
     found = await open_offers(session, MarketKey(), settings, now)
     assert [row.external_id for _, row in found] == ["good-ask"]
+
+
+async def test_an_offer_posted_beyond_the_max_age_is_not_open(session, settings, make_listing):
+    now = utcnow()
+    deep = await goods_item(session, DEEP)
+    posted = now - timedelta(hours=settings.listing_max_age_hours, minutes=1)
+    stale = make_listing("old-ask", 1.0, kind="ask", quantity=25, observed_at=posted)
+    fresh = make_listing("new-ask", 1.0, kind="ask", quantity=25, observed_at=now)
+    await store_listings(session, deep.id, [stale, fresh], now)
+    found = await open_offers(session, MarketKey(), settings, now)
+    assert [row.external_id for _, row in found] == ["new-ask"]

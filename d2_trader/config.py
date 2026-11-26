@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     # How long an ask stays live after a collector last saw it.
     ask_stale_hours: int = 6
+    # The oldest an open ask or bid may be, by when it was posted or last edited, and
+    # still count. Traderie keeps listings up for months; a 271-day-old ask still shown
+    # is a price nobody has moved to, not today's market. The operator's choice (2026-11-25).
+    listing_max_age_hours: int = 24
 
     discord_webhook_url: str | None = None
     ntfy_url: str | None = None
