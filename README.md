@@ -162,13 +162,13 @@ their cheapest alternative, or somebody who wants another rune and pays in this 
 ("wants 2 Ist, has 5 Um" sells Um at 0.4 Ist). A bundle of runes is listed under its
 most valuable one, at the bundle's discount; a bid paid in anything but runes and measured goods is left out.
 The rates job fetches them with the trades, so they are as fresh as its last run.
-Above the charts, **Trade up** lists the open offers that hand you a higher rune for lower
-ones at no more than 10% over the estimate: you pay at least one rune, and every rune you
-pay with is worth less than the best one you get, from sellers ("Ist for 3 Pul + 2 Perfect
+The **Trade up** tab lists the open offers that hand you a higher rune for lower ones at
+no more than 10% over the estimate: you pay at least one rune, and every rune you pay with
+is worth less than the best one you get, from sellers ("Ist for 3 Pul + 2 Perfect
 Amethyst") and buyers ("wants 4 Pul, pays an Ist") alike, best price first. Measured goods
-may make up either side. Type what you hold ("15 Pul, 4 Vex, 2 amethysts", read as the
-Currencies page reads a deal) and it keeps only the offers that covers; a part it
-cannot read is named rather than dropped.
+may make up either side. Beside it, a count per rune and good records what you hold,
+saved per market (a ladder stash is not a non-ladder one); once saved, the list keeps
+only the offers those holdings can pay for, with a link to show every one.
 `python -m d2_trader rune-value lo` prints one rune's value today with its 95% interval
 and its last two weeks (`--mode`, `--non-ladder`, `--version` pick the market). Checked on
 simulated rune markets (`tests/test_rune_model.py`), the interval held the true value on

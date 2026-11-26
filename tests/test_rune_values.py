@@ -14,17 +14,14 @@ from d2_trader.services.rune_values import (
     CHEAPEST,
     HISTORY_DAYS,
     Ask,
-    Holdings,
     RuneAsks,
     TradeUp,
     active_asks,
     bait_floors,
     bid_offers,
     fit_market,
-    format_holdings,
     model_floor,
     offers_by_rune,
-    parse_holdings,
     rank_asks,
     report,
     rune_item,
@@ -396,40 +393,6 @@ def test_trade_ups_are_best_first_then_highest_rune_and_capped():
 def test_a_rune_the_rates_lack_is_left_out():
     assert up([("Ist", ask([[["pul", 3.0]]]))]) != []
     assert trade_ups([("Ist", ask([[["pul", 3.0]]]))], {"ist": 1.0}) == []
-
-
-@pytest.mark.parametrize(
-    ("text", "held"),
-    [
-        ("15 pul, 10 um, 3 mal, 1 gul, 4 vex", {"pul": 15, "um": 10, "mal": 3, "gul": 1, "vex": 4}),
-        (
-            "4x Vex + 2 amethysts, 20 deep shards",
-            {"vex": 4, "perfect amethyst": 2, "deep worldstone shard": 20},
-        ),
-        ("2 Ber Rune, 1 ber", {"ber": 3}),
-        ("zod", {"zod": 1}),
-        ("", {}),
-    ],
-)
-def test_holdings_are_read_as_typed(text, held):
-    found = parse_holdings(text)
-    assert isinstance(found, Holdings)
-    assert (found.held, found.unread) == (held, [])
-
-
-def test_a_part_naming_no_one_currency_is_left_out_and_says_why():
-    found = parse_holdings("15 pul, 3 jewels, 0 um, 2 shards, 15 pul 10 um")
-    assert found.held == {"pul": 15}
-    assert len(found.unread) == 4
-    assert "No currency called 'jewels'" in found.unread[0]
-    assert "none at all" in found.unread[1]
-    assert "could be" in found.unread[2]
-
-
-def test_holdings_are_written_back_runes_first_then_goods():
-    held = {"perfect amethyst": 2.0, "vex": 4, "pul": 15, "um": 0}
-    assert format_holdings(held) == "15 Pul, 4 Vex, 2 Perfect Amethyst"
-    assert parse_holdings(format_holdings(held)).held == {k: v for k, v in held.items() if v}
 
 
 async def test_an_open_bid_is_active(session):

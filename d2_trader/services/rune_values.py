@@ -24,11 +24,9 @@ from d2_trader.currency import (
     SEED_RATES,
     Alternative,
     alternative_value,
-    display_name,
     normalize_currency,
     unit_value,
 )
-from d2_trader.deals import SEPARATORS, UnreadableDeal, parse_lot
 from d2_trader.markets import MarketKey
 from d2_trader.models import CurrencyRate, Item, Listing, Market
 from d2_trader.rune_model import RuneFit, Trade, fit_runes, trade_from
@@ -198,39 +196,6 @@ class TradeUp:
     get: Alternative  # What you receive...
     pay: Alternative  # ...and what you hand over for it.
     ratio: float  # What you pay over what you get, at today's values: under 1 is a discount.
-
-
-@dataclass(frozen=True)
-class Holdings:
-    held: dict[str, float]  # Currency key to how many.
-    unread: list[str]  # Why each part that is not a currency was left out.
-
-
-def parse_holdings(text: str) -> Holdings:
-    """The runes and goods someone holds, as typed: "15 pul, 4x vex, 2 amethysts".
-
-    Each part is read as the Currencies page reads a deal, so "deep shards" is a Deep
-    Worldstone Shard. A part naming no one currency is left out and says why, and a
-    currency named twice is summed.
-    """
-    held: dict[str, float] = {}
-    unread = []
-    for part in SEPARATORS.split(" ".join(text.lower().split())):
-        if not part:
-            continue
-        try:
-            currency, count = parse_lot(part)
-        except UnreadableDeal as problem:
-            unread.append(str(problem))
-            continue
-        held[currency] = held.get(currency, 0) + count
-    return Holdings(held, unread)
-
-
-def format_holdings(held: Mapping[str, float]) -> str:
-    """Holdings as `parse_holdings` reads them: runes by value, then goods."""
-    order = [*RUNES, *GOODS]
-    return ", ".join(f"{held[c]:g} {display_name(c)}" for c in order if held.get(c))
 
 
 def bait_floors(
