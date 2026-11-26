@@ -15,6 +15,40 @@
 </section>
 
 {% if panels %}
+<section class="card trade-up">
+  <h2>Trade up</h2>
+  <form method="get" action="/runes" class="holdings">
+    <input type="hidden" name="platform" value="{{ market.platform }}">
+    <input type="hidden" name="mode" value="{{ market.mode }}">
+    <input type="hidden" name="ladder" value="{{ 'true' if market.ladder else 'false' }}">
+    <input type="hidden" name="version" value="{{ market.game_version }}">
+    <label>What you hold
+      <input type="text" name="have" value="{{ held }}" placeholder="15 Pul, 4 Vex, 2 Perfect Amethyst, 20 Deep Worldstone Shard" size="48">
+    </label>
+    <button type="submit">Find trades</button>
+  </form>
+  {% for problem in unread %}<p class="unread">Left out: {{ problem }}</p>{% endfor %}
+  {% if ups %}
+  <div class="scroll"><table class="asks trade-ups">
+    <caption class="muted">{{ ups | length }} open offers where you get a higher rune for lower ones, at no more than {{ "%.0f" | format(fair_margin * 100) }}% over the estimate{% if held %}, payable from {{ held }}{% endif %}</caption>
+    <thead><tr><th>You get</th><th>You pay</th><th class="num">vs estimate</th><th>Their side</th><th>Listed</th></tr></thead>
+    <tbody>
+      {% for t in ups %}
+      <tr>
+        <td>{% if t.listing.url %}<a href="{{ t.listing.url }}" rel="noreferrer">{{ ui.lots(t.get) }}</a>{% else %}{{ ui.lots(t.get) }}{% endif %}</td>
+        <td>{{ ui.lots(t.pay) }}</td>
+        <td class="num">{{ "%+.0f%%" | format((t.ratio - 1) * 100) }}</td>
+        <td class="muted">{{ "selling" if t.listing.kind == "ask" else "buying" }}</td>
+        <td class="muted">{{ humanize(t.listing.observed_at, now) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+    <p class="muted">No open offer trades lower runes up into a higher one at a fair price{% if held %} payable from {{ held }}{% endif %} right now.</p>
+  {% endif %}
+  <p class="muted">Offers where you hand over at least one rune and every rune you hand over is worth less than the best one you get: a seller asking "Ist for 4 Pul" or "Ist for 3 Pul + 2 Perfect Amethyst", or a buyer who wants 4 Pul and pays an Ist. Gems, shards, keys and other goods may make up either side once trades have valued them; an offer naming anything else is left out. "vs estimate" is what you pay against what you get at today's values, so a negative number is a discount. Bait prices are hidden as below.</p>
+</section>
 <div class="rune-grid">
   {% for p in panels %}
   <section class="card rune-card">

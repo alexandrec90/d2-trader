@@ -14,16 +14,23 @@ from d2_trader.services.rune_values import (
     CHEAPEST,
     HISTORY_DAYS,
     Ask,
+    Holdings,
     RuneAsks,
+    TradeUp,
     active_asks,
+    bait_floors,
     bid_offers,
     fit_market,
+    format_holdings,
     model_floor,
+    offers_by_rune,
+    parse_holdings,
     rank_asks,
     report,
     rune_item,
     rune_trades,
     sold_rows,
+    trade_ups,
 )
 from d2_trader.sources.types import ParsedListing
 
@@ -245,6 +252,174 @@ def test_asks_and_bids_are_ranked_together():
     ranked = rank_asks(rows, RATES)
     assert [(a.value, a.wanted) for a in ranked["lo"].cheapest] == [(4.0, "ist"), (4.5, None)]
     assert "ist" not in ranked
+
+
+def test_offers_by_rune_keeps_every_offer_rank_asks_ranks():
+    rows = [("Lo", ask([[["ist", 4.5]]])), ("Ist", bid([[["lo", 1.0]]], quantity=4))]
+    found = offers_by_rune(rows, RATES)
+    assert sorted(a.value for a in found["lo"]) == [4.0, 4.5]
+
+
+# --- trading up -------------------------------------------------------------------
+
+
+def up(rows, have=None, **kwargs):
+    return [(t.get, t.pay) for t in trade_ups(rows, RATES, have, **kwargs)]
+
+
+def test_a_seller_asking_lower_runes_is_a_trade_up():
+    """Ist for 3 Pul: 0.99 Ist paid for 1 Ist."""
+    [offer] = trade_ups([("Ist", ask([[["pul", 3.0]]]))], RATES)
+    assert isinstance(offer, TradeUp)
+    assert (offer.get, offer.pay) == ([("ist", 1.0)], [("pul", 3.0)])
+    assert offer.ratio == pytest.approx(0.99)
+
+
+def test_a_buyer_paying_a_higher_rune_for_lower_ones_is_a_trade_up():
+    """Wants 3 Pul, pays an Ist."""
+    assert up([("Pul", bid([[["ist", 1.0]]], quantity=3))]) == [([("ist", 1.0)], [("pul", 3.0)])]
+
+
+def test_a_lot_is_received_whole():
+    """2 Ist for 6 Pul."""
+    assert up([("Ist", ask([[["pul", 6.0]]], quantity=2))]) == [([("ist", 2.0)], [("pul", 6.0)])]
+
+
+def test_paying_more_than_the_fair_margin_is_left_out():
+    """Ist for 4 Pul is 1.32 Ist for 1 Ist: a third over."""
+    rows = [("Ist", ask([[["pul", 4.0]]]))]
+    assert up(rows) == []
+    assert up(rows, margin=0.5) == [([("ist", 1.0)], [("pul", 4.0)])]
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [("Ist", ask([[["gul", 1.0]]]))],  # Down: Gul is worth more than Ist.
+        [("Ist", ask([[["ist", 1.0]]]))],  # Sideways.
+        [("Ist", ask([[["pul", 1.0], ["gul", 1.0]]]))],  # Pays with a higher rune.
+        [("Ist", ask([[["perfect amethyst", 40.0]]]))],  # No rune paid.
+        [("Pul", bid([[["perfect amethyst", 40.0]]], quantity=3))],  # No rune got.
+        [("Ist", ask([[["pul", 2.0], ["deep worldstone shard", 5.0]]]))],  # Unmeasured.
+        [("Pul", bid([[["ist", 1.0], ["mystery charm", 1.0]]], quantity=3))],
+        [("Pul", bid([[["lem", 1.0]]], quantity=3))],  # Pays with a lower rune.
+        [("Ist", ask([[["pul", 0.0]]]))],
+        [("Ist", Listing(kind="sold", alternatives=[[["pul", 3.0]]], quantity=1, last_seen_at=NOW))],
+    ],
+)
+def test_what_is_not_a_trade_up_into_a_higher_rune_is_left_out(rows):
+    assert up(rows) == []
+
+
+def test_a_bundle_of_lower_runes_counts():
+    """Ber for 1 Lo + 3 Ohm: 14 Ist for 14."""
+    [offer] = trade_ups([("Ber", ask([[["lo", 1.0], ["ohm", 3.0]]]))], RATES)
+    assert offer.ratio == pytest.approx(1.0)
+
+
+def test_goods_may_ride_along_with_the_lower_runes():
+    """Ist for 3 Pul + 2 Perfect Amethyst: 1.05 Ist paid for 1 Ist."""
+    [offer] = trade_ups([("Ist", ask([[["pul", 3.0], ["perfect amethyst", 2.0]]]))], RATES)
+    assert offer.pay == [("pul", 3.0), ("perfect amethyst", 2.0)]
+    assert offer.ratio == pytest.approx(1.05)
+
+
+def test_a_good_counts_once_it_is_measured():
+    rows = [("Ist", ask([[["pul", 2.0], ["deep worldstone shard", 5.0]]]))]
+    [offer] = trade_ups(rows, {**RATES, "deep worldstone shard": 0.05})
+    assert offer.ratio == pytest.approx(0.91)
+
+
+def test_goods_may_come_with_the_higher_rune():
+    """Wants 3 Pul, pays an Ist and a Perfect Amethyst."""
+    rows = [("Pul", bid([[["ist", 1.0], ["perfect amethyst", 1.0]]], quantity=3))]
+    [offer] = trade_ups(rows, RATES)
+    assert offer.get == [("ist", 1.0), ("perfect amethyst", 1.0)]
+    assert offer.ratio == pytest.approx(0.99 / 1.03)
+
+
+def test_holdings_must_cover_the_goods_too():
+    rows = [("Ist", ask([[["pul", 3.0], ["perfect amethyst", 2.0]]]))]
+    assert up(rows, {"pul": 15}) == []
+    assert up(rows, {"pul": 15, "perfect amethyst": 1}) == []
+    assert len(up(rows, {"pul": 15, "perfect amethyst": 2})) == 1
+
+
+def test_each_alternative_is_its_own_trade_up():
+    """Lo for "5 Ist or 15 Pul or 1 Ber"."""
+    rows = [("Lo", ask([[["ist", 5.0]], [["pul", 15.0]], [["ber", 1.0]]]))]
+    assert up(rows) == [([("lo", 1.0)], [("pul", 15.0)]), ([("lo", 1.0)], [("ist", 5.0)])]
+
+
+def test_holdings_keep_only_what_they_can_pay_for():
+    rows = [("Ist", ask([[["pul", 3.0]]])), ("Lo", ask([[["ist", 5.0]]])), ("Ohm", ask([[["vex", 1.0], ["pul", 2.0]]]))]
+    assert up(rows, {"pul": 15}) == [([("ist", 1.0)], [("pul", 3.0)])]
+    assert up(rows, {"pul": 2, "vex": 4}) == [([("ohm", 1.0)], [("vex", 1.0), ("pul", 2.0)])]
+    assert up(rows, {}) == []
+
+
+def test_a_buyers_wanted_runes_must_be_held_too():
+    rows = [("Pul", bid([[["ist", 1.0]]], quantity=3))]
+    assert up(rows, {"pul": 2}) == []
+    assert len(up(rows, {"pul": 3})) == 1
+
+
+def test_bait_is_not_a_trade_up():
+    rows = [("Lo", ask([[["ist", v]]])) for v in (5.0, 5.2, 4.9, 5.1, 5.3)]
+    rows.append(("Lo", ask([[["el", 1.0]]])))
+    assert bait_floors(rows, RATES)["lo"] == 4.9
+    found = trade_ups(rows, RATES)
+    assert [t.pay[0][1] for t in found] == [4.9, 5.0, 5.1, 5.2, 5.3]
+
+
+def test_trade_ups_are_best_first_then_highest_rune_and_capped():
+    rows = [
+        ("Ist", ask([[["pul", 3.0]]])),  # 0.99
+        ("Lo", ask([[["ist", 2.5]]])),  # 0.5
+        ("Ber", ask([[["ist", 7.0]]])),  # 0.5, and a higher rune
+        ("Ohm", ask([[["ist", 3.0]]])),  # 1.0
+    ]
+    assert [t.get[0][0] for t in trade_ups(rows, RATES)] == ["ber", "lo", "ist", "ohm"]
+    assert [t.get[0][0] for t in trade_ups(rows, RATES, limit=1)] == ["ber"]
+
+
+def test_a_rune_the_rates_lack_is_left_out():
+    assert up([("Ist", ask([[["pul", 3.0]]]))]) != []
+    assert trade_ups([("Ist", ask([[["pul", 3.0]]]))], {"ist": 1.0}) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "held"),
+    [
+        ("15 pul, 10 um, 3 mal, 1 gul, 4 vex", {"pul": 15, "um": 10, "mal": 3, "gul": 1, "vex": 4}),
+        (
+            "4x Vex + 2 amethysts, 20 deep shards",
+            {"vex": 4, "perfect amethyst": 2, "deep worldstone shard": 20},
+        ),
+        ("2 Ber Rune, 1 ber", {"ber": 3}),
+        ("zod", {"zod": 1}),
+        ("", {}),
+    ],
+)
+def test_holdings_are_read_as_typed(text, held):
+    found = parse_holdings(text)
+    assert isinstance(found, Holdings)
+    assert (found.held, found.unread) == (held, [])
+
+
+def test_a_part_naming_no_one_currency_is_left_out_and_says_why():
+    found = parse_holdings("15 pul, 3 jewels, 0 um, 2 shards, 15 pul 10 um")
+    assert found.held == {"pul": 15}
+    assert len(found.unread) == 4
+    assert "No currency called 'jewels'" in found.unread[0]
+    assert "none at all" in found.unread[1]
+    assert "could be" in found.unread[2]
+
+
+def test_holdings_are_written_back_runes_first_then_goods():
+    held = {"perfect amethyst": 2.0, "vex": 4, "pul": 15, "um": 0}
+    assert format_holdings(held) == "15 Pul, 4 Vex, 2 Perfect Amethyst"
+    assert parse_holdings(format_holdings(held)).held == {k: v for k, v in held.items() if v}
 
 
 async def test_an_open_bid_is_active(session):

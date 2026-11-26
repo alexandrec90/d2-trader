@@ -92,7 +92,8 @@ async def test_the_page_lists_each_runes_cheapest_open_asks(client, sessions):
         await session.commit()
     page = (await client.get("/runes")).text
     assert "Cheapest 3 offers" in page
-    table = page[page.index('<table class="asks">') : page.index("</table>")]
+    start = page.index('<table class="asks">')
+    table = page[start : page.index("</table>", start)]
     assert re.findall(r"<td>([\d.]+ Ist)</td>", table) == ["6 Ist", "6.5 Ist", "7 Ist"]
     assert "+8%" in page  # 6.5 Ist against a Lo estimated at 6.
     assert page.count("No open offers seen in the last hour.") == len(CHARTED) - 1
@@ -112,6 +113,61 @@ async def test_the_page_lists_what_people_who_want_another_rune_pay(client, sess
     assert "Cheapest 1 offers" in page
     assert re.search(r"<td>5 Ist for 1 Lo <span", page)
     assert "they want" in page
+
+
+async def store_trade_up_offers(sessions):
+    """A Lo sold for 6 Ist, and two Lo asks: one for 15 Pul (up), one for a Ber (down)."""
+    now = utcnow()
+    listings = [
+        ParsedListing("traderie", "s", "sold", MarketKey(), [[("ist", 6.0)]], now),
+        ParsedListing("traderie", "up", "ask", MarketKey(), [[("pul", 15.0)]], now),
+        ParsedListing("traderie", "down", "ask", MarketKey(), [[("ber", 1.0)]], now),
+    ]
+    async with sessions() as session:
+        lo = await rune_item(session, "lo")
+        await store_listings(session, lo.id, listings, now)
+        await session.commit()
+
+
+def trade_up_table(page):
+    start = page.index('<table class="asks trade-ups">')
+    return page[start : page.index("</table>", start)]
+
+
+async def test_the_page_lists_trades_up_into_a_higher_rune(client, sessions):
+    await store_trade_up_offers(sessions)
+    page = (await client.get("/runes")).text
+    assert "<h2>Trade up</h2>" in page
+    table = trade_up_table(page)
+    assert re.search(r"<td>1 Lo</td>\s*<td>15 Pul</td>", table)
+    assert "1 Ber" not in table
+    assert "selling" in table
+
+
+async def test_holdings_keep_the_trade_ups_they_can_pay_for(client, sessions):
+    await store_trade_up_offers(sessions)
+    page = (await client.get("/runes?have=15+pul%2C+4+vex")).text
+    assert "payable from 15 Pul, 4 Vex" in trade_up_table(page)
+    assert 'value="15 Pul, 4 Vex"' in page  # The form keeps what was typed.
+    short = (await client.get("/runes?have=10+pul")).text
+    assert '<table class="asks trade-ups">' not in short
+    assert "at a fair price payable from 10 Pul right now." in short
+
+
+async def test_holdings_read_goods_and_say_what_they_could_not_read(client, sessions):
+    await store_trade_up_offers(sessions)
+    page = (await client.get("/runes?have=15+pul%2C+2+amethysts%2C+3+jewels")).text
+    assert 'value="15 Pul, 2 Perfect Amethyst"' in page
+    assert "Left out: No currency called" in page and "jewels" in page
+    assert "payable from 15 Pul, 2 Perfect Amethyst" in trade_up_table(page)
+
+
+async def test_the_holdings_form_keeps_the_market(client, sessions):
+    await store_trade_up_offers(sessions)
+    page = (await client.get("/runes")).text
+    form = page[page.index('<form method="get" action="/runes"') : page.index("</form>")]
+    for name, value in [("platform", "PC"), ("mode", "softcore"), ("ladder", "true"), ("version", "rotw")]:
+        assert f'name="{name}" value="{value}"' in form
 
 
 def test_a_poll_interval_reads_as_a_span():

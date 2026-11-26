@@ -23,8 +23,12 @@ from d2_trader.services.rune_values import (
     RuneAsks,
     active_asks,
     fit_market,
+    FAIR_MARGIN,
+    format_holdings,
     measured_markets,
+    parse_holdings,
     rank_asks,
+    trade_ups,
 )
 from d2_trader.sources.traderie import RUNE_ITEM_IDS
 from d2_trader.trend import PathPoint
@@ -136,7 +140,11 @@ async def valuation_rates(
 
 
 @router.get("/runes", response_class=HTMLResponse)
-async def runes_page(request: Request, session: Db, market: PageMarket):
+async def runes_page(
+    request: Request, session: Db, market: PageMarket, have: Annotated[str, Query()] = ""
+):
+    """`have` lists the runes and goods the viewer holds ("15 pul, 2 amethysts"): the
+    trade-up list then keeps only the offers they can pay for."""
     now = utcnow()
     _, seasons = await current_state(session, now)
     fit = await fit_market(session, market, seasons, now)
@@ -144,13 +152,19 @@ async def runes_page(request: Request, session: Db, market: PageMarket):
     goods = await fit_market_goods(session, market, fit, seasons, now)
     settings = request.app.state.settings
     rows = await open_offers(session, market, settings, now)
-    asks = rank_asks(rows, await valuation_rates(session, fit, goods))
+    rates = await valuation_rates(session, fit, goods)
+    asks = rank_asks(rows, rates)
+    holdings = parse_holdings(have)
     return await render(
         request,
         session,
         "runes.html",
         market=market,
         markets=[(m, market_query(m)) for m in markets],
+        held=format_holdings(holdings.held),
+        unread=holdings.unread,
+        ups=trade_ups(rows, rates, holdings.held or None),
+        fair_margin=FAIR_MARGIN,
         panels=panels(fit, seasons, now, asks),
         trades=fit.trades,
         every=hours_label(settings.rates_poll_hours),

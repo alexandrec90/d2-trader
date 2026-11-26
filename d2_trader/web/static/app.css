@@ -220,6 +220,11 @@ dl.plain dd { margin: 0; color: var(--ink-2); }
 .deal-bad strong { color: var(--bad); }
 .deal-fair strong, .deal-unclear strong { color: var(--warn); }
 .asks td:not(:first-child), .asks th { white-space: nowrap; }
+.trade-up { margin-bottom: 16px; }
+.trade-up h2 { margin-top: 0; }
+.holdings { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 8px; }
+.holdings input[type="text"] { max-width: 100%; }
+.trade-up .unread { color: var(--bad); margin: 0 0 8px; }
 .market-picker { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
 .market-picker [aria-current] { font-weight: 600; color: var(--ink); text-decoration: none; }
 
