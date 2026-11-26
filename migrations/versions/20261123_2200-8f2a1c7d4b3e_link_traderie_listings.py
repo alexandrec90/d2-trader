@@ -13,7 +13,9 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "8f2a1c7d4b3e"  # pragma: allowlist secret - an alembic revision id
-down_revision: str | Sequence[str] | None = "c5059d1902d1"
+down_revision: str | Sequence[str] | None = (
+    "c5059d1902d1"  # pragma: allowlist secret - an alembic revision id
+)
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

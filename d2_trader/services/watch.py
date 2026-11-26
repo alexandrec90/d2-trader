@@ -17,7 +17,7 @@ from d2_trader.services.calendar import current_state, load_seasons
 from d2_trader.services.catalog import get_or_create_market, market_key
 from d2_trader.services.fg_rates import valuation_for
 from d2_trader.services.notify import Message, deliver
-from d2_trader.services.pricing import MarketView, PriceQuery, market_view
+from d2_trader.services.pricing import Freshness, MarketView, PriceQuery, market_view
 
 
 async def list_watchlists(session: AsyncSession) -> list[Watchlist]:
@@ -77,9 +77,11 @@ async def view_for(
     wanted = query_for(watch)
     seasons = await load_seasons(session)
     valuation = await valuation_for(session, watch.market_id, wanted.market, seasons, now)
-    stale_after = timedelta(hours=settings.ask_stale_hours)
-    max_age = timedelta(hours=settings.listing_max_age_hours)
-    view = await market_view(session, wanted, state, valuation, now, stale_after, max_age)
+    fresh = Freshness(
+        stale_after=timedelta(hours=settings.ask_stale_hours),
+        max_age=timedelta(hours=settings.listing_max_age_hours),
+    )
+    view = await market_view(session, wanted, state, valuation, now, fresh)
     return view, valuation
 
 

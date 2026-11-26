@@ -1,6 +1,8 @@
 import os
+import re
 import subprocess
 import sys
+from pathlib import Path
 
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
@@ -107,3 +109,21 @@ async def test_the_cleanup_drops_asks_that_are_also_stored_as_bids(session):
         ("traderie", "twin", "bid"),
         ("traderie", "twin", "sold"),
     ]
+
+
+def test_every_revision_id_carries_the_secrets_allowlist_pragma():
+    """detect-secrets reads a quoted hex revision id as a high-entropy secret, and the
+    gate went red on a `down_revision` line that lacked the pragma. The template writes
+    it on both lines, so a new migration arrives with it."""
+    migrations = Path(__file__).resolve().parent.parent / "migrations"
+    files = [migrations / "script.py.mako", *sorted((migrations / "versions").glob("*.py"))]
+    # A quoted id, wherever `ruff format` wrapped it, or the template's placeholder.
+    pattern = re.compile(r"\"[0-9a-f]{12}\"|\$\{repr\((up|down)_revision\)\}")
+    bare = [
+        f"{path.name}:{number}"
+        for path in files
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if pattern.search(line) and "pragma: allowlist secret" not in line
+    ]
+    assert len(files) > 1
+    assert bare == []

@@ -115,13 +115,19 @@ def to_quotes(listings: list[Listing], valuation: Valuation) -> list[Quote]:
     return quotes
 
 
-def counts_now(
-    listing: Listing,
-    window_start: datetime,
-    now: datetime,
-    stale_after: timedelta,
-    max_age: timedelta,
-) -> bool:
+@dataclass(frozen=True)
+class Freshness:
+    """How long a collected ask or bid stays part of today's market.
+
+    `stale_after` bounds the time since a collector last saw it up, `max_age` the time
+    since it was posted.
+    """
+
+    stale_after: timedelta
+    max_age: timedelta
+
+
+def counts_now(listing: Listing, window_start: datetime, now: datetime, fresh: Freshness) -> bool:
     """Whether a listing describes today's market.
 
     A sale is history, so it counts while it is recent. An ask or a bid a collector just
@@ -131,7 +137,10 @@ def counts_now(
     """
     if listing.kind == "sold" or listing.source not in CONFIRMED_SOURCES:
         return listing.observed_at >= window_start
-    return now - listing.last_seen_at <= stale_after and now - listing.observed_at <= max_age
+    return (
+        now - listing.last_seen_at <= fresh.stale_after
+        and now - listing.observed_at <= fresh.max_age
+    )
 
 
 async def market_view(
@@ -140,8 +149,7 @@ async def market_view(
     state: SeasonState,
     valuation: Valuation,
     now: datetime,
-    stale_after: timedelta,
-    max_age: timedelta,
+    fresh: Freshness,
 ) -> MarketView:
     """Today's market for one item: only quotes from inside this season's window."""
     ladder = wanted.market.ladder
@@ -150,7 +158,7 @@ async def market_view(
     # a listing that is somehow still up.
     floor = season_floor(state, ladder) or now - timedelta(days=OPEN_LISTING_DAYS)
     rows = await _listings(session, wanted, min(floor, window.start))
-    live = [row for row in rows if counts_now(row, window.start, now, stale_after, max_age)]
+    live = [row for row in rows if counts_now(row, window.start, now, fresh)]
     quotes = to_quotes(live, valuation)
     # The estimate looks at every sale since the floor, not just the window: a quiet
     # week should widen the interval, not empty it.

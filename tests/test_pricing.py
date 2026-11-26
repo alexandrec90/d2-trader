@@ -11,6 +11,7 @@ from d2_trader.models import Listing
 from d2_trader.seasons import season_state
 from d2_trader.stats import Quote
 from d2_trader.services.pricing import (
+    Freshness,
     MarketView,
     PriceQuery,
     history,
@@ -24,12 +25,13 @@ from d2_trader.services.pricing import (
 
 STALE = timedelta(hours=6)
 MAX_AGE = timedelta(hours=24)
+FRESH = Freshness(stale_after=STALE, max_age=MAX_AGE)
 
 
 async def view(session, item, market, state, now=NOW, ethereal=None) -> MarketView:
     wanted = PriceQuery(item.id, market, ethereal)
     valuation = Valuation(dict(SEED_RATES))
-    return await market_view(session, wanted, state, valuation, now, STALE, MAX_AGE)
+    return await market_view(session, wanted, state, valuation, now, FRESH)
 
 
 async def test_storing_twice_keeps_one_row_and_refreshes_last_seen(session, item, make_listing):
@@ -276,7 +278,7 @@ def test_what_counts_as_the_market_now():
         return Listing(kind=kind, source=source, observed_at=observed, last_seen_at=seen)
 
     def counts(row):
-        return counts_now(row, start, NOW, STALE, MAX_AGE)
+        return counts_now(row, start, NOW, FRESH)
 
     # A sale counts while it is inside the window, however recently it was seen.
     assert counts(listing("sold", "traderie", NOW))
