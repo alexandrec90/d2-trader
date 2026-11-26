@@ -4,6 +4,13 @@ from d2_trader.services.calendar import load_seasons
 from d2_trader.web.app import create_app
 
 
+async def test_the_dashboard_reports_the_release_it_started_on(client, monkeypatch):
+    monkeypatch.setenv("D2_TRADER_RELEASE", "sha:code")
+    assert (await client.get("/api/release")).json() == {"release": "sha:code"}
+    monkeypatch.delenv("D2_TRADER_RELEASE")
+    assert (await client.get("/api/release")).json() == {"release": ""}
+
+
 async def test_static_files_are_served(client):
     assert (await client.get("/static/app.css")).status_code == 200
     assert (await client.get("/static/app.js")).status_code == 200
