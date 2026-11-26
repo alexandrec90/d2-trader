@@ -88,7 +88,8 @@ function isBusy() {
   return (
     activity.editing ||
     activity.hovering ||
-    document.querySelector("main details[open]") !== null ||
+    // A section the page itself opened is no sign of anyone reading it; one opened by hand is.
+    document.querySelector("main details[open]:not([data-keeps-live])") !== null ||
     (focused !== null && focused.closest("main form") !== null)
   );
 }

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from d2_trader.models import (
     AlertRule,
     CurrencyRate,
+    Holding,
     Listing,
     Notification,
     SeasonRow,
@@ -17,7 +18,7 @@ from d2_trader.models import (
 )
 
 # Each one moves when what a page shows moves: a job finishing, a price arriving, a rule
-# firing, a rate or a date changing, or a list being edited in another tab.
+# firing, a rate or a date changing, or a list or holdings being edited in another tab.
 SIGNALS = (
     func.max(SourceRun.id),
     func.max(Notification.id),
@@ -30,6 +31,8 @@ SIGNALS = (
     func.max(SeasonRow.updated_at),
     func.max(CurrencyRate.updated_at),
     func.count(CurrencyRate.id),
+    func.max(Holding.updated_at),
+    func.count(Holding.id),
 )
 
 
