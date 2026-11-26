@@ -25,7 +25,7 @@ async def test_the_footer_credits_diablo2io(client):
 
 
 async def test_every_page_links_a_tab_icon_that_is_served(client):
-    assert 'rel="icon" href="/static/favicon.svg"' in (await client.get("/")).text
+    assert 'rel="icon" href="/static/favicon.svg?v=' in (await client.get("/")).text
     icon = await client.get("/static/favicon.svg")
     assert icon.status_code == 200
     assert icon.headers["content-type"].startswith("image/svg+xml")

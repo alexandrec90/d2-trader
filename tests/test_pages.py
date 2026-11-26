@@ -5,9 +5,26 @@ from sqlalchemy import text
 from starlette.requests import Request
 
 from d2_trader.seasons import Phase
-from d2_trader.web.pages import PHASE_LABELS, get_session, humanize_delta, render
+from d2_trader.web.pages import PHASE_LABELS, get_session, humanize_delta, render, static_url
 
 NOW = datetime(2026, 11, 6, tzinfo=UTC)
+
+
+def test_a_static_url_changes_when_its_file_does(tmp_path):
+    # Regression: a fixed /static/app.css URL let browsers keep the old stylesheet.
+    (tmp_path / "app.css").write_text("a {}", encoding="utf8")
+    before = static_url("app.css", tmp_path)
+    assert before.startswith("/static/app.css?v=")
+    assert static_url("app.css", tmp_path) == before
+    (tmp_path / "app.css").write_text("a { color: red }", encoding="utf8")
+    assert static_url("app.css", tmp_path) != before
+
+
+async def test_pages_link_their_assets_by_versioned_url(client):
+    page = (await client.get("/")).text
+    assert static_url("app.css") in page
+    assert static_url("app.js") in page
+    assert (await client.get(static_url("app.css"))).status_code == 200
 
 
 def fake_request(sessions, query: bytes = b"") -> Request:
