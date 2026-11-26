@@ -56,13 +56,17 @@ testpaths = ["tests/"]
 # No `-q` in `addopts`: an agent adds its own, and `-qq` drops the "N passed" line.
 # `-p devkit_temproot` is the vendored plugin giving each run a temp root of its own, so a
 # run elsewhere on the machine cannot fail this one at exit; `pythonpath` is where it lives.
-# `-m "not local"`: the live-site contract tests reach real sites, so only
-# `scripts/e2e.py` selects them. See `.claude/rules/local-e2e.md`.
-addopts = "-p devkit_temproot -m 'not local'"
+# `-m "not local and not ci_e2e"`: the live-site contract tests reach real sites, so only
+# `scripts/e2e.py` selects them -- `local` on this workstation, `ci_e2e` (`--ci`) in the
+# PR Gate's E2E job. See `.claude/rules/local-e2e.md`.
+addopts = "-p devkit_temproot -m 'not local and not ci_e2e'"
 pythonpath = ["scripts/pytest-plugins"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-markers = ["local: reaches live sites from this workstation; run by scripts/e2e.py"]
+markers = [
+  "local: reaches a live site that must be fetched from this workstation; run by scripts/e2e.py",
+  "ci_e2e: reaches a live site a hosted runner can fetch; run by scripts/e2e.py --ci in the PR Gate's E2E job",
+]
 
 [tool.mypy]
 python_version = "3.12"

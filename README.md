@@ -31,7 +31,8 @@ For development:
 uv sync --all-extras          # creates .venv from the committed uv.lock
 docker compose up -d db
 pytest                        # applies migrations itself
-python scripts/e2e.py         # do the parsers still understand the live sites?
+python scripts/e2e.py         # do the parsers still understand the live sites? (diablo2.io)
+python scripts/e2e.py --ci    # the same for the sites CI's E2E job fetches (Blizzard)
 python -m d2_trader run seasons   # one collection job, now
 ```
 
@@ -253,7 +254,7 @@ d2_trader/               application code
   sources/               one module per external site; http.py is the only HTTP path
   services/              everything that combines the database with the above
   web/                   the dashboard
-tests/                   tests; test_live_sites.py is the local tier scripts/e2e.py runs
+tests/                   tests; test_live_sites.py is the tier scripts/e2e.py runs
 scripts/                 project scripts (Python, each with tests)
 scripts/hooks/           vendored agent harness — edit upstream in devkit
 .devkit.toml      the per-project harness seam (NOT vendored)
