@@ -16,7 +16,13 @@ from d2_trader.sources.types import ParsedListing
 SOURCE = "traderie"
 API = "https://traderie.com/api/diablo2resurrected"
 SITE = "https://traderie.com/diablo2resurrected"
-KIND_PARAMS = {"ask": {}, "bid": {"selling": "false"}, "sold": {"completed": "true"}}
+# An ask must say `selling=true`: without it Traderie mixes in "they want" listings, and a
+# bid for a Ber, read as an ask, is a Ber offered at the price its poster would pay.
+KIND_PARAMS = {
+    "ask": {"selling": "true"},
+    "bid": {"selling": "false"},
+    "sold": {"completed": "true"},
+}
 # Stable ids, listed so measuring rates does not cost a search per rune per market.
 RUNE_ITEM_IDS = {
     "pul": "2899268590",

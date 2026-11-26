@@ -81,3 +81,29 @@ async def test_the_link_backfill_points_traderie_rows_at_their_own_listing(sessi
         "diablo2io": "https://x/lo",
         "manual": None,
     }
+
+
+async def test_the_cleanup_drops_asks_that_are_also_stored_as_bids(session):
+    """Listing 1002606574735 wanted a Ber and was stored as a Ber ask as well."""
+    cleanup = ScriptDirectory.from_config(Config("alembic.ini")).get_revision("3d7e9b2a6c41")
+    item = Item(name="Ber", category="misc")
+    session.add(item)
+    await session.flush()
+    now = utcnow()
+    price = [[("ohm", 1.0), ("vex", 1.0), ("gul", 1.0)]]
+    rows = [
+        ParsedListing("traderie", "twin", "ask", MarketKey(), price, now),
+        ParsedListing("traderie", "twin", "bid", MarketKey(), price, now),
+        ParsedListing("traderie", "twin", "sold", MarketKey(), price, now),
+        ParsedListing("traderie", "ask-only", "ask", MarketKey(), price, now),
+        ParsedListing("manual", "twin", "ask", MarketKey(), price, now),
+    ]
+    await store_listings(session, item.id, rows, now)
+    await session.execute(text(cleanup.module.CLEANUP))
+    kept = (await session.execute(select(Listing.source, Listing.external_id, Listing.kind))).all()
+    assert sorted(kept) == [
+        ("manual", "twin", "ask"),
+        ("traderie", "ask-only", "ask"),
+        ("traderie", "twin", "bid"),
+        ("traderie", "twin", "sold"),
+    ]
