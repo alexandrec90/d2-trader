@@ -3,7 +3,7 @@
 import pytest
 
 from d2_trader.currency import GOODS, RUNES
-from d2_trader.deals import Estimate, UnreadableDeal, judge, parse_lot, parse_side, resolve
+from d2_trader.deals import Deal, Estimate, UnreadableDeal, judge, parse_lot, parse_side, resolve
 
 DEEP = "deep worldstone shard"
 VALUES = {
@@ -85,6 +85,8 @@ def test_an_empty_side_is_refused():
 def test_the_operators_example_is_fair():
     """An Ist for 20 worldstone shards, at 20 to the Ist."""
     deal = judge([(DEEP, 20)], [("ist", 1)], VALUES)
+    assert isinstance(deal, Deal)
+    assert (deal.give, deal.get) == ([(DEEP, 20)], [("ist", 1)])
     assert deal.verdict == "fair"
     assert deal.ratio == pytest.approx(1.0)
     assert deal.fair_give == pytest.approx(20)

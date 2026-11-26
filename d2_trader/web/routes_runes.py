@@ -88,7 +88,12 @@ def panels(
     return found
 
 
-def page_market(platform: str, mode: str, ladder: bool, version: str) -> MarketKey:
+def page_market(
+    platform: Annotated[str, Query()] = "PC",
+    mode: Annotated[str, Query()] = "softcore",
+    ladder: Annotated[bool, Query()] = True,
+    version: Annotated[str, Query()] = "rotw",
+) -> MarketKey:
     """The market a page's query asks for, each bad part replaced by the default."""
     return MarketKey(
         platform if platform in PLATFORMS else "PC",
@@ -96,6 +101,10 @@ def page_market(platform: str, mode: str, ladder: bool, version: str) -> MarketK
         ladder,
         version if version in GAME_VERSIONS else "rotw",
     )
+
+
+# A page's market, read from its query by `page_market`.
+PageMarket = Annotated[MarketKey, Depends(page_market)]
 
 
 async def open_offers(
@@ -124,16 +133,8 @@ async def valuation_rates(
 
 
 @router.get("/runes", response_class=HTMLResponse)
-async def runes_page(
-    request: Request,
-    session: Db,
-    platform: Annotated[str, Query()] = "PC",
-    mode: Annotated[str, Query()] = "softcore",
-    ladder: Annotated[bool, Query()] = True,
-    version: Annotated[str, Query()] = "rotw",
-):
+async def runes_page(request: Request, session: Db, market: PageMarket):
     now = utcnow()
-    market = page_market(platform, mode, ladder, version)
     _, seasons = await current_state(session, now)
     fit = await fit_market(session, market, seasons, now)
     markets = await measured_markets(session)

@@ -22,10 +22,10 @@ from d2_trader.web.charts import Chart, rune_chart
 from d2_trader.web.pages import render
 from d2_trader.web.routes_runes import (
     Db,
+    PageMarket,
     hours_label,
     market_query,
     open_offers,
-    page_market,
     valuation_rates,
 )
 
@@ -108,15 +108,11 @@ def check_deal(
 async def currencies_page(
     request: Request,
     session: Db,
-    platform: Annotated[str, Query()] = "PC",
-    mode: Annotated[str, Query()] = "softcore",
-    ladder: Annotated[bool, Query()] = True,
-    version: Annotated[str, Query()] = "rotw",
+    market: PageMarket,
     give: Annotated[str, Query(max_length=200)] = "",
     get: Annotated[str, Query(max_length=200)] = "",
 ):
     now = utcnow()
-    market = page_market(platform, mode, ladder, version)
     settings = request.app.state.settings
     _, seasons = await current_state(session, now)
     fit = await fit_market(session, market, seasons, now)

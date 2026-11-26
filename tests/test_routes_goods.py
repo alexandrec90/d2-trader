@@ -15,7 +15,14 @@ from d2_trader.services.goods_values import goods_item
 from d2_trader.services.pricing import store_listings
 from d2_trader.services.rune_values import rune_item
 from d2_trader.web import routes_goods
-from d2_trader.web.routes_goods import check_deal, currencies_page, estimates, families
+from d2_trader.web.routes_goods import (
+    Family,
+    GoodPanel,
+    check_deal,
+    currencies_page,
+    estimates,
+    families,
+)
 from d2_trader.web.routes_runes import open_offers, page_market, valuation_rates
 
 DEEP = "deep worldstone shard"
@@ -40,8 +47,10 @@ def test_the_page_is_routed():
 def test_goods_are_grouped_by_family_and_the_untraded_named():
     _, goods = fits()
     found = families(goods, [], utcnow(), {})
+    assert all(isinstance(f, Family) for f in found)
     assert [f.name for f in found] == list(GOODS_BY_FAMILY)
     [panel] = found[0].panels
+    assert isinstance(panel, GoodPanel) and panel.asks is None  # No offers were passed.
     assert (panel.name, panel.direct, panel.few) == ("Deep Worldstone Shard", 5, False)
     assert panel.chart is not None and "20 per Ist" in panel.chart.data
     assert len(found[0].untraded) == len(GOODS_BY_FAMILY[found[0].name]) - 1
@@ -81,12 +90,21 @@ def test_a_deal_is_checked_only_once_typed():
 
 
 def test_a_bad_market_is_replaced_part_by_part():
-    assert page_market("PC", "nonsense", False, "lod") == MarketKey(ladder=False, game_version="lod")
+    assert page_market("PC", "nonsense", False, "lod") == MarketKey(
+        ladder=False, game_version="lod"
+    )
 
 
 def test_goods_are_fetched_less_often_than_runes_unless_configured():
     settings = Settings(_env_file=None, database_url="postgresql://x")
     assert settings.goods_poll_hours == 3 > settings.rates_poll_hours
+
+
+@pytest.mark.parametrize("path", ["/currencies", "/runes"])
+async def test_a_page_reads_its_market_from_the_query(client, path):
+    page = (await client.get(f"{path}?mode=hardcore&ladder=false&version=nonsense")).text
+    # A bad part is replaced by its default, the rest kept.
+    assert f"{MarketKey(mode='hardcore', ladder=False).label} · from" in page
 
 
 async def test_the_empty_page_still_lists_every_family(client):

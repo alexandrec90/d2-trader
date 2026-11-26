@@ -4,21 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}D2 Trader{% endblock %}</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
 </head>
 <body>
   <header class="top">
     <a class="brand" href="/">D2 Trader</a>
-    <nav>
-      <a href="/">Watchlists</a>
-      <a href="/seasons">Seasons</a>
-      <a href="/import">Import</a>
-      <a href="/runes">Runes</a>
-      <a href="/currencies">Currencies</a>
-      <a href="/rates">Rates</a>
-      <a href="/sources">Sources</a>
-      <a href="/notifications">Inbox <span class="badge" id="unread" {% if not unread %}hidden{% endif %}>{{ unread }}</span></a>
+    {# A watched item's page is reached from the watchlists, so it counts as one of them. #}
+    {% set path = request.scope.path %}
+    {% set here = "/" if path.startswith("/watch/") else path %}
+    {% macro current(href) %}{% if href == here %} aria-current="page"{% endif %}{% endmacro %}
+    <nav aria-label="Main">
+      <a href="/"{{ current("/") }}>Watchlists</a>
+      <a href="/seasons"{{ current("/seasons") }}>Seasons</a>
+      <a href="/import"{{ current("/import") }}>Import</a>
+      <a href="/runes"{{ current("/runes") }}>Runes</a>
+      <a href="/currencies"{{ current("/currencies") }}>Currencies</a>
+      <a href="/rates"{{ current("/rates") }}>Rates</a>
+      <a href="/sources"{{ current("/sources") }}>Sources</a>
+      <a href="/notifications"{{ current("/notifications") }}>Inbox <span class="badge" id="unread" {% if not unread %}hidden{% endif %}>{{ unread }}</span></a>
     </nav>
     <span class="live" id="live-status" aria-live="polite"></span>
   </header>

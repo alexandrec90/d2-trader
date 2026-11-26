@@ -1,3 +1,5 @@
+import pytest
+
 from d2_trader.services.calendar import load_seasons
 from d2_trader.web.app import create_app
 
@@ -20,6 +22,28 @@ async def test_hidden_always_hides_whatever_the_element_styles_say(client):
 
 async def test_the_footer_credits_diablo2io(client):
     assert "Data courtesy of" in (await client.get("/")).text
+
+
+async def test_every_page_links_a_tab_icon_that_is_served(client):
+    assert 'rel="icon" href="/static/favicon.svg"' in (await client.get("/")).text
+    icon = await client.get("/static/favicon.svg")
+    assert icon.status_code == 200
+    assert icon.headers["content-type"].startswith("image/svg+xml")
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/", "/seasons", "/import", "/runes", "/currencies", "/rates", "/sources", "/notifications"],
+)
+async def test_only_the_open_tab_is_marked_current(client, path):
+    page = (await client.get(path)).text
+    nav = page[page.index('<nav aria-label="Main">') : page.index("</nav>")]
+    assert f'<a href="{path}" aria-current="page">' in nav
+    assert nav.count("aria-current") == 1
+
+
+async def test_the_stylesheet_marks_the_open_tab(client):
+    assert ".top nav a[aria-current]" in (await client.get("/static/app.css")).text
 
 
 async def test_api_docs_are_not_published(sessions, settings):
