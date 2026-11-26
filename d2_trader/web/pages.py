@@ -1,5 +1,6 @@
 """What every page shares: the session, the template context, the formatters."""
 
+import hashlib
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
@@ -74,6 +75,20 @@ async def render(
     )
 
 
+STATIC = Path(__file__).parent / "static"
+
+
+def static_url(name: str, static_dir: Path = STATIC) -> str:
+    """A static file's URL, stamped with a hash of its contents.
+
+    The URL changes whenever the file does, so a browser holding an old stylesheet
+    fetches the new one after a deploy instead of reusing its cached copy.
+    """
+    digest = hashlib.sha256((static_dir / name).read_bytes()).hexdigest()[:10]
+    return f"/static/{name}?v={digest}"
+
+
+templates.env.globals["static_url"] = static_url
 templates.env.globals["format_value"] = format_value
 templates.env.globals["format_range"] = format_range
 templates.env.globals["format_like"] = format_like
