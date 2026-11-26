@@ -24,9 +24,11 @@ from d2_trader.currency import (
     SEED_RATES,
     Alternative,
     alternative_value,
+    display_name,
     normalize_currency,
     unit_value,
 )
+from d2_trader.deals import SEPARATORS, UnreadableDeal, parse_lot
 from d2_trader.markets import MarketKey
 from d2_trader.models import CurrencyRate, Item, Listing, Market
 from d2_trader.rune_model import RuneFit, Trade, fit_runes, trade_from
@@ -145,14 +147,12 @@ def bid_offers(wanted: str, listing: Listing, rates: Mapping[str, float]) -> lis
     return list(cheapest.items())
 
 
-def rank_asks(
-    rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float], limit: int = CHEAPEST
-) -> dict[str, RuneAsks]:
-    """Each rune's cheapest offers per rune, from asks and bids alike, bait left out.
+def offers_by_rune(
+    rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float]
+) -> dict[str, list[Ask]]:
+    """Every way to get each rune, from asks and bids alike, valued in Ist per rune.
 
-    A seller takes whichever alternative is offered, so an ask is worth its cheapest. A
-    bait price ("Zod for 1 El") would top every list, so asks far from the rest of the
-    rune's asks are dropped as the dashboard's lowest ask drops them, and counted.
+    A seller takes whichever alternative is offered, so an ask is worth its cheapest.
     """
     by_rune: dict[str, list[Ask]] = {}
     for name, listing in rows:
@@ -163,13 +163,159 @@ def rank_asks(
         value = unit_value(listing.alternatives, rates, "ask", listing.quantity)
         if value is not None and value > 0:
             by_rune.setdefault(normalize_currency(name), []).append(Ask(listing, value))
+    return by_rune
+
+
+def rank_asks(
+    rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float], limit: int = CHEAPEST
+) -> dict[str, RuneAsks]:
+    """Each rune's cheapest offers per rune, from asks and bids alike, bait left out.
+
+    A bait price ("Zod for 1 El") would top every list, so asks far from the rest of the
+    rune's asks are dropped as the dashboard's lowest ask drops them, and counted.
+    """
     ranked = {}
-    for rune, asks in by_rune.items():
+    for rune, asks in offers_by_rune(rows, rates).items():
         kept = set(drop_outliers([a.value for a in asks]))
         honest = sorted((a for a in asks if a.value in kept), key=lambda a: a.value)
         seen = max(a.listing.last_seen_at for a in asks)
         ranked[rune] = RuneAsks(honest[:limit], len(asks) - len(honest), seen)
     return ranked
+
+
+# How far over the model's value a trade up may cost and still count as fair: the model's
+# own interval is about this wide, so a tighter line would only sort noise.
+FAIR_MARGIN = 0.10
+TRADE_UPS = 25
+RUNE_SET = frozenset(RUNES)
+
+
+@dataclass(frozen=True)
+class TradeUp:
+    """An open offer that hands you a rune worth more than any rune you pay with."""
+
+    listing: Listing
+    get: Alternative  # What you receive...
+    pay: Alternative  # ...and what you hand over for it.
+    ratio: float  # What you pay over what you get, at today's values: under 1 is a discount.
+
+
+@dataclass(frozen=True)
+class Holdings:
+    held: dict[str, float]  # Currency key to how many.
+    unread: list[str]  # Why each part that is not a currency was left out.
+
+
+def parse_holdings(text: str) -> Holdings:
+    """The runes and goods someone holds, as typed: "15 pul, 4x vex, 2 amethysts".
+
+    Each part is read as the Currencies page reads a deal, so "deep shards" is a Deep
+    Worldstone Shard. A part naming no one currency is left out and says why, and a
+    currency named twice is summed.
+    """
+    held: dict[str, float] = {}
+    unread = []
+    for part in SEPARATORS.split(" ".join(text.lower().split())):
+        if not part:
+            continue
+        try:
+            currency, count = parse_lot(part)
+        except UnreadableDeal as problem:
+            unread.append(str(problem))
+            continue
+        held[currency] = held.get(currency, 0) + count
+    return Holdings(held, unread)
+
+
+def format_holdings(held: Mapping[str, float]) -> str:
+    """Holdings as `parse_holdings` reads them: runes by value, then goods."""
+    order = [*RUNES, *GOODS]
+    return ", ".join(f"{held[c]:g} {display_name(c)}" for c in order if held.get(c))
+
+
+def bait_floors(rows: Iterable[tuple[str, Listing]], rates: Mapping[str, float]) -> dict[str, float]:
+    """Each rune's lowest honest price in Ist: below it, an offer is bait (as `rank_asks`)."""
+    floors = {}
+    for rune, asks in offers_by_rune(rows, rates).items():
+        kept = drop_outliers([a.value for a in asks])
+        if kept:
+            floors[rune] = min(kept)
+    return floors
+
+
+def _sides(rune: str, listing: Listing) -> Iterable[tuple[Alternative, Alternative]]:
+    """Each (get, pay) a listing allows: an ask sells its rune, a bid pays to get it."""
+    lot: Alternative = [(rune, float(max(listing.quantity, 1)))]
+    for alternative in listing.alternatives:
+        other = [(normalize_currency(str(c)), float(q)) for c, q in alternative]
+        yield (lot, other) if listing.kind == "ask" else (other, lot)
+
+
+def _trade_up(
+    listing: Listing,
+    get: Alternative,
+    pay: Alternative,
+    rates: Mapping[str, float],
+    floors: Mapping[str, float],
+    have: Mapping[str, float] | None,
+    margin: float,
+) -> TradeUp | None:
+    """The offer as a trade up, or None if it is not one, not fair, bait or unaffordable.
+
+    Goods may ride along on either side; the runes are what must climb.
+    """
+    lots = [*get, *pay]
+    if any(c not in TRADED or c not in rates or q <= 0 for c, q in lots):
+        return None
+    got = [c for c, _ in get if c in RUNE_SET]
+    paid = [c for c, _ in pay if c in RUNE_SET]
+    if not got or not paid:
+        return None
+    top = max(got, key=rates.__getitem__)
+    if any(rates[c] >= rates[top] for c in paid):
+        return None
+    if have is not None and any(q > have.get(c, 0) for c, q in pay):
+        return None
+    worth, cost = alternative_value(get, rates), alternative_value(pay, rates)
+    if not worth or cost is None:
+        return None
+    ratio = cost / worth
+    # The floor is the cheapest honest offer itself, priced another way round: a hair of
+    # rounding must not push that offer under its own floor.
+    if ratio > 1 + margin or rates[top] * ratio < floors.get(top, 0) * (1 - 1e-9):
+        return None
+    return TradeUp(listing, get, pay, ratio)
+
+
+def trade_ups(
+    rows: Iterable[tuple[str, Listing]],
+    rates: Mapping[str, float],
+    have: Mapping[str, float] | None = None,
+    margin: float = FAIR_MARGIN,
+    limit: int = TRADE_UPS,
+) -> list[TradeUp]:
+    """Open offers to trade lower runes up into a higher one, at a fair price or better.
+
+    An offer counts when you pay at least one rune, get at least one, and every rune you
+    pay with is worth less than the best one you get: "Ist for 4 Pul" or "Ist for 3 Pul
+    + 2 Perfect Amethyst" from a seller, "wants 4 Pul, pays an Ist" from a buyer. Measured
+    goods may make up either side; anything else, or a good with no value yet, rules the
+    offer out. Each alternative is its own offer, since you pick which to pay. Given
+    `have`, only what it can pay for is kept. Bait is left out as `rank_asks` leaves it
+    out. Best ratio first, then the highest rune.
+    """
+    rows = list(rows)
+    floors = bait_floors(rows, rates)
+    found = []
+    for name, listing in rows:
+        if listing.kind not in ("ask", "bid"):
+            continue
+        for get, pay in _sides(normalize_currency(name), listing):
+            offer = _trade_up(listing, get, pay, rates, floors, have, margin)
+            if offer is not None:
+                found.append(offer)
+    found.sort(key=lambda t: (t.ratio, -max(rates[c] for c, _ in t.get)))
+    return found[:limit]
 
 
 async def active_asks(
