@@ -33,6 +33,7 @@ from d2_trader.rune_model import RuneFit, Trade, fit_runes, trade_from
 from d2_trader.seasons import Season, reset_days, season_floor, season_state
 from d2_trader.services.catalog import comparable_market_ids, get_item_by_name, market_key
 from d2_trader.services.fg_rates import rune_item_names
+from d2_trader.sources import traderie
 from d2_trader.stats import drop_outliers
 
 HISTORY_DAYS = 120
@@ -65,13 +66,19 @@ def model_floor(seasons: list[Season], ladder: bool, now: datetime) -> datetime:
 async def sold_rows(
     session: AsyncSession, market: MarketKey, since: datetime, names: Sequence[str]
 ) -> list[tuple[str, Listing]]:
-    """Every completed sale of the named items (lower case) in a market since a moment."""
+    """Every completed Traderie sale of the named items (lower case) in a market since a moment.
+
+    Traderie only, by the operator's choice (2026-11-27): the rune and goods values are
+    Traderie's prices. diablo2.io's sales of a watched rune carry no game version and lag
+    three days, and a d2jsp paste is priced in forum gold, so neither is a rune trade here.
+    """
     query = (
         select(Item.name, Listing)
         .join(Item, Item.id == Listing.item_id)
         .where(
             func.lower(Item.name).in_(names),
             Listing.market_id.in_(await comparable_market_ids(session, market)),
+            Listing.source == traderie.SOURCE,
             Listing.kind == "sold",
             Listing.observed_at >= since,
         )

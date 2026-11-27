@@ -241,6 +241,20 @@ async def test_sold_rows_are_the_named_items_only(session):
     assert [(name, row.external_id) for name, row in rows] == [("Lo", "x1")]
 
 
+async def test_only_traderie_sales_value_the_runes(session):
+    """A diablo2.io or d2jsp sale of a rune, in the same market, values nothing."""
+    lo = await rune_item(session, "lo")
+    listings = [
+        ParsedListing(source, f"{source}-1", "sold", LADDER, [[("ist", 5.0)]], NOW)
+        for source in ("traderie", "diablo2io", "d2jsp")
+    ]
+    await store_listings(session, lo.id, listings, NOW)
+    rows = await sold_rows(session, LADDER, NOW - timedelta(days=1), ["lo"])
+    assert [row.source for _, row in rows] == ["traderie"]
+    trades = await rune_trades(session, LADDER, NOW - timedelta(days=1))
+    assert len(trades) == 1
+
+
 def test_a_bid_for_something_unvalued_is_left_out():
     assert bid_offers("mystery", bid([[["lo", 1.0]]]), RATES) == []
 
