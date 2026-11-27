@@ -1,9 +1,11 @@
 """What the operator holds, saved per market."""
 
 import pytest
+from sqlalchemy import select
 
 from d2_trader.currency import GOODS_BY_FAMILY, RUNES
 from d2_trader.markets import MarketKey
+from d2_trader.models import Holding
 from d2_trader.services.holdings import (
     FIELD,
     BadHolding,
@@ -60,7 +62,7 @@ def test_the_traded_runes_are_open_and_the_rest_folded_until_held():
     assert [c for c, _, _ in runes.rows] == RUNES[RUNES.index("pul") :]
     assert ("pul", "Pul", 15) in runes.rows and ("ber", "Ber", 0) in runes.rows
     assert (low.title, low.folded) == ("Low runes", True)
-    assert [c for c, _, _ in low.rows][0] == "el"
+    assert next(c for c, _, _ in low.rows) == "el"
     assert [g.title for g in goods] == list(GOODS_BY_FAMILY)
     assert all(g.folded for g in goods)
 
@@ -96,3 +98,10 @@ async def test_each_market_keeps_its_own_holdings(session):
     assert await load_holdings(session, LADDER) == {"pul": 15}
     assert await load_holdings(session, NON_LADDER) == {"ber": 1}
     assert await load_holdings(session, MarketKey(mode="hardcore")) == {}
+
+
+async def test_a_saved_holding_is_one_holding_row_per_currency(session):
+    """`Holding` is the table `save_holdings` writes: a row per held currency."""
+    await save_holdings(session, LADDER, {"pul": 15, "vex": 4})
+    rows = (await session.scalars(select(Holding))).all()
+    assert sorted((row.currency, row.quantity) for row in rows) == [("pul", 15), ("vex", 4)]
