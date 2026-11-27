@@ -149,6 +149,22 @@ async function keepCurrent(data, state) {
   }
 }
 
+// Opening a listing marks its row at once, as the server will on the next redraw, so a run
+// of links opened in new tabs shows each one as it goes rather than one poll later.
+function markOpened(event) {
+  if (event.type === "auxclick" && event.button !== 1) return;
+  const link = event.target.closest('a[href^="/listings/"][href$="/open"]');
+  if (!link) return;
+  const row = link.closest("tr");
+  if (row) row.classList.add("visited");
+  if (link.nextElementSibling?.classList.contains("visited-mark")) return;
+  const mark = document.createElement("span");
+  mark.className = "visited-mark";
+  mark.title = "You opened this listing";
+  mark.textContent = "✓ seen";
+  link.after(" ", mark);
+}
+
 function setUpLive() {
   // A flash message belongs to the action that caused it, not to every redraw after it.
   const url = new URL(location.href);
@@ -164,6 +180,8 @@ function setUpLive() {
   document.addEventListener("pointerover", (event) => {
     activity.hovering = event.target.closest("[data-chart]") !== null;
   });
+  document.addEventListener("click", markOpened);
+  document.addEventListener("auxclick", markOpened);
   document.addEventListener("click", async (event) => {
     if (!event.target.closest("[data-enable-browser-alerts]")) return;
     await Notification.requestPermission();
