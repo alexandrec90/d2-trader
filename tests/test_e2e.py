@@ -1,4 +1,5 @@
 import importlib.util
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -76,14 +77,16 @@ def test_a_green_run_with_a_skip_under_devkit_e2e_is_red():
 
 
 def fake_pytest(monkeypatch, tmp_path, stdout: str, returncode: int):
-    class Result:
-        pass
-
-    Result.stdout, Result.stderr, Result.returncode = stdout, "", returncode
-    calls = []
+    result = subprocess.CompletedProcess([], returncode, stdout, "")
+    calls: list[list[str]] = []
     artifact = tmp_path / "logs" / "e2e.log"
     monkeypatch.setattr(e2e, "ARTIFACT", artifact)
-    monkeypatch.setattr(e2e.subprocess, "run", lambda cmd, **k: calls.append(cmd) or Result)
+
+    def run(cmd, **_kwargs):
+        calls.append(cmd)
+        return result
+
+    monkeypatch.setattr(e2e.subprocess, "run", run)
     return artifact, calls
 
 

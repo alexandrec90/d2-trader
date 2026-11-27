@@ -11,6 +11,7 @@ from d2_trader.services.rune_values import rune_item
 from d2_trader.sources.types import ParsedListing
 from d2_trader.web import routes_trade
 from d2_trader.web.routes_trade import (
+    back_to,
     form_market,
     save_holdings_form,
     trade_up_page,
@@ -25,6 +26,17 @@ def test_the_page_and_its_form_are_routed():
         ("GET", "/trade-up"): trade_up_page,
         ("POST", "/trade-up/holdings"): save_holdings_form,
     }
+
+
+def test_back_to_redirects_to_the_markets_page_with_an_error_ahead_of_a_message():
+    plain = back_to(MarketKey())
+    assert plain.status_code == 303
+    assert plain.headers["location"].startswith("/trade-up?")
+    said = back_to(MarketKey(), message="saved holdings")
+    assert unquote(said.headers["location"]).endswith("&message=saved holdings")
+    both = back_to(MarketKey(), message="saved", error="bad count")
+    location = unquote(both.headers["location"])
+    assert location.endswith("&error=bad count") and "message=" not in location
 
 
 def test_a_form_names_its_market_as_a_query_does():
@@ -49,9 +61,9 @@ async def store_offers(sessions):
         await session.commit()
 
 
-async def hold(sessions, held, market=MarketKey()):
+async def hold(sessions, held, market=None):
     async with sessions() as session:
-        await save_holdings(session, market, held)
+        await save_holdings(session, MarketKey() if market is None else market, held)
         await session.commit()
 
 
