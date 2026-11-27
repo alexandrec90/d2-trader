@@ -19,6 +19,12 @@ Then open <http://127.0.0.1:8010>. The first catalog sync takes about six minute
 because diablo2.io is fetched at one page a minute; until it finishes, no item can be
 added to a watchlist. `/sources` shows what each collector is doing.
 
+Port 8010 is held by devkit's dashboard gateway (`devkit.dashboards`, `scripts/dashboards.py`
+in devkit). The first request starts `app`, and `app` is stopped again after 30 minutes
+without a request, so the dashboard holds memory only while it is in use. The container
+itself publishes on 18010 (`APP_BACKEND_PORT`). Without the gateway running, 18010 is the
+dashboard's address.
+
 A merge then deploys itself: once this checkout fast-forwards, the dashboard and the
 worker each restart onto the new code (the worker after the job in hand), installing
 changed dependencies and applying migrations first. Only the main checkout, on `main`, does
@@ -236,7 +242,7 @@ is its conventional base plus the slot:
 
 | Service | Host port |
 | --- | --- |
-| app | 8010 |
+| app | 8010 (the gateway's; the container publishes 18010) |
 | postgres | 5442 |
 
 Regenerate the `.env` block for any checkout with

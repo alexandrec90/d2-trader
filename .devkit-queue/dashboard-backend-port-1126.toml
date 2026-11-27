@@ -1,0 +1,23 @@
+# docker-compose.yml moved `app` from 127.0.0.1:8010 to 18010 so devkit's dashboard
+# gateway can hold 8010. A compose edit is the one thing `release.py` cannot deploy, so
+# a running `app` keeps 8010 until it is recreated, and the gateway cannot bind it.
+on = "every-machine"
+# After devkit's gateway is installed, so 8010 is never left with nothing behind it.
+when = "task:devkit/install-dashboards-1126"
+agent = """
+Recreate d2-trader's `app` container so it publishes on 18010 instead of 8010. Work on
+this PC only.
+
+Run `docker ps --filter name=d2-trader-app --format "{{.Names}} {{.Ports}}"`. If no such
+container is running here, there is nothing to do: say so in the intent and stop. Do not
+start d2-trader's stack on a PC that is not already running it.
+
+If it is running and still publishes 8010: bring the static d2-trader checkout to
+origin/main if it is behind and clean, then run `docker compose up -d app` there. Confirm
+that `docker ps` now shows `127.0.0.1:18010->8000`. Then run
+`python scripts/dashboards.py` from the static devkit checkout and report whether the
+gateway is listening on 8010. If it is not, run
+`python scripts/install-dashboards.py --check` there and report what it says.
+
+Delete no volume and touch no other service.
+"""
