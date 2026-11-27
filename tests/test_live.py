@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from conftest import NOW
 
 from d2_trader.markets import MarketKey
@@ -6,6 +8,7 @@ from d2_trader.services.holdings import save_holdings
 from d2_trader.services.live import SIGNALS, data_version
 from d2_trader.services.notify import mark_all_read
 from d2_trader.services.pricing import store_listings
+from d2_trader.services.visits import record_visit
 
 
 async def test_nothing_changed_means_the_same_version(session):
@@ -50,5 +53,23 @@ async def test_saved_holdings_change_it(session):
     assert await data_version(session) != after
 
 
+async def test_opening_a_listing_changes_it(session):
+    """The offer tables mark opened listings, so an open page has to redraw for one."""
+    before = await data_version(session)
+    await record_visit(session, "https://traderie.com/listing/1", NOW)
+    after = await data_version(session)
+    assert after != before
+    # Opening another while the first page is still loading is a change of its own.
+    await record_visit(session, "https://traderie.com/listing/2", NOW)
+    assert await data_version(session) != after
+
+
+async def test_reopening_a_listing_changes_it(session):
+    await record_visit(session, "https://traderie.com/listing/1", NOW)
+    before = await data_version(session)
+    await record_visit(session, "https://traderie.com/listing/1", NOW + timedelta(minutes=1))
+    assert await data_version(session) != before
+
+
 def test_every_table_a_page_shows_is_watched():
-    assert len(SIGNALS) >= 12
+    assert len(SIGNALS) >= 14

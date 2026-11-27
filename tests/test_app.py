@@ -67,6 +67,17 @@ async def test_only_a_section_opened_by_hand_pauses_live_updates(client):
     assert 'querySelector("main details[open]")' not in script
 
 
+async def test_opening_a_listing_marks_it_without_waiting_for_a_redraw(client):
+    """The script marks the clicked row as `offer_link` and `visited_class` would, and on
+    a middle click too, which opens a tab without firing `click`."""
+    script = (await client.get("/static/app.js")).text
+    assert 'a[href^="/listings/"][href$="/open"]' in script
+    assert 'addEventListener("click", markOpened)' in script
+    assert 'addEventListener("auxclick", markOpened)' in script
+    assert 'classList.add("visited")' in script
+    assert '"visited-mark"' in script
+
+
 async def test_the_stylesheet_marks_the_open_tab(client):
     assert ".top nav a[aria-current]" in (await client.get("/static/app.css")).text
 
