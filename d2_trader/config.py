@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # is a price nobody has moved to, not today's market. The operator's choice (2026-11-25).
     listing_max_age_hours: int = 24
 
+    # The operator's own Traderie username (2026-11-26): offers they posted are not
+    # offers they can take, so the Runes and Trade up pages leave them out. Empty keeps all.
+    traderie_username: str = "rakanishoes"
+
     discord_webhook_url: str | None = None
     ntfy_url: str | None = None
 

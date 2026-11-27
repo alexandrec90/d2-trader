@@ -112,10 +112,10 @@
     <thead><tr><th>Seen</th><th>Kind</th><th>Source</th><th>Price</th></tr></thead>
     <tbody>
       {% for listing in listings[:40] %}
-      <tr>
+      <tr{{ ui.visited_class(listing) }}>
         <td class="muted">{{ humanize(listing.observed_at, now) }}</td>
         <td>{{ listing.kind }}</td>
-        <td>{% if listing.url %}<a href="{{ listing.url }}" rel="noreferrer">{{ listing.source }}</a>{% else %}{{ listing.source }}{% endif %}</td>
+        <td>{% call ui.offer_link(listing) %}{{ listing.source }}{% endcall %}</td>
         <td>{{ ui.listing_price(listing) }}</td>
       </tr>
       {% endfor %}

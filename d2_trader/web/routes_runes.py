@@ -26,6 +26,7 @@ from d2_trader.services.rune_values import (
     measured_markets,
     rank_asks,
 )
+from d2_trader.services.visits import visited_urls
 from d2_trader.sources.traderie import RUNE_ITEM_IDS
 from d2_trader.trend import PathPoint
 from d2_trader.web.charts import Chart, rune_chart
@@ -117,7 +118,23 @@ async def open_offers(
     posted_since = now - timedelta(hours=settings.listing_max_age_hours)
     runes = await active_asks(session, market, runes_since, posted_since=posted_since)
     goods = await active_asks(session, market, goods_since, list(GOODS), posted_since)
-    return runes + goods
+    return not_mine(runes + goods, settings.traderie_username)
+
+
+def not_mine(rows: list[tuple[str, Listing]], username: str) -> list[tuple[str, Listing]]:
+    """Leave out the operator's own offers: one cannot take a trade one posted.
+
+    Traderie usernames are matched without regard to case. A listing stored before its
+    poster was read has none, so it stays until the next collection names one.
+    """
+    own = username.strip().casefold()
+    if not own:
+        return rows
+    return [
+        (name, listing)
+        for name, listing in rows
+        if str((listing.attrs or {}).get("poster") or "").casefold() != own
+    ]
 
 
 async def valuation_rates(
@@ -145,6 +162,7 @@ async def runes_page(request: Request, session: Db, market: PageMarket):
     settings = request.app.state.settings
     rows = await open_offers(session, market, settings, now)
     asks = rank_asks(rows, await valuation_rates(session, fit, goods))
+    shown = [a.listing.url for ranked in asks.values() for a in ranked.cheapest]
     return await render(
         request,
         session,
@@ -154,4 +172,5 @@ async def runes_page(request: Request, session: Db, market: PageMarket):
         panels=panels(fit, seasons, now, asks),
         trades=fit.trades,
         every=hours_label(settings.rates_poll_hours),
+        visited=await visited_urls(session, shown),
     )

@@ -99,6 +99,17 @@ def lot_size(raw: dict) -> int:
     return max(int(raw.get("amount") or 1), 1)
 
 
+def poster(raw: dict) -> str | None:
+    """Who posted a listing, by their Traderie username.
+
+    The operator saw `"username": "Larzuk001"` in a listings response on 2026-11-26 but
+    not where it sits, so both a top-level field and a `user` block are read.
+    """
+    user = raw.get("user")
+    name = raw.get("username") or (user.get("username") if isinstance(user, dict) else None)
+    return str(name) if name else None
+
+
 def parse_listings(payload: dict, market: MarketKey, kind: str) -> list[ParsedListing]:
     """Listings with a stated price. "Make offer" ones carry no price to learn from."""
     parsed = []
@@ -118,7 +129,7 @@ def parse_listings(payload: dict, market: MarketKey, kind: str) -> list[ParsedLi
                 quantity=lot_size(raw),
                 ethereal=bool(props.get("Ethereal")),
                 url=listing_url(str(raw["id"])),
-                attrs={"rarity": props.get("Rarity")},
+                attrs={"rarity": props.get("Rarity"), "poster": poster(raw)},
             )
         )
     return parsed

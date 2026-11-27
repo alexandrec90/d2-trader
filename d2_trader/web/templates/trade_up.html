@@ -55,8 +55,8 @@
     <thead><tr><th>You get</th><th>You pay</th><th class="num">vs estimate</th><th>Their side</th><th>Listed</th></tr></thead>
     <tbody>
       {% for t in ups %}
-      <tr>
-        <td>{% if t.listing.url %}<a href="{{ t.listing.url }}" rel="noreferrer">{{ ui.lots(t.get) }}</a>{% else %}{{ ui.lots(t.get) }}{% endif %}</td>
+      <tr{{ ui.visited_class(t.listing) }}>
+        <td>{% call ui.offer_link(t.listing) %}{{ ui.lots(t.get) }}{% endcall %}</td>
         <td>{{ ui.lots(t.pay) }}</td>
         <td class="num">{{ "%+.0f%%" | format((t.ratio - 1) * 100) }}</td>
         <td class="muted">{{ "selling" if t.listing.kind == "ask" else "buying" }}</td>

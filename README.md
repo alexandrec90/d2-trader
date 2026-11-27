@@ -170,6 +170,10 @@ Amethyst") and buyers ("wants 4 Pul, pays an Ist") alike, best price first. Meas
 may make up either side. Beside it, a count per rune and good records what you hold,
 saved per market (a ladder stash is not a non-ladder one); once saved, the list keeps
 only the offers those holdings can pay for, with a link to show every one.
+An offer's link opens its listing through the dashboard, which remembers the visit: an
+offer already opened is dimmed and marked "seen" on every page that lists it. Offers
+posted by `TRADERIE_USERNAME` (yours) are left out of both tabs: one you posted is not
+one you can take.
 `python -m d2_trader rune-value lo` prints one rune's value today with its 95% interval
 and its last two weeks (`--mode`, `--non-ladder`, `--version` pick the market). Checked on
 simulated rune markets (`tests/test_rune_model.py`), the interval held the true value on

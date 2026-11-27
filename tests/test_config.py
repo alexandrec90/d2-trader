@@ -6,6 +6,10 @@ def test_traderie_stays_off_unless_someone_decides_otherwise():
     assert Settings(_env_file=None, database_url="x").traderie_enabled is False
 
 
+def test_the_operators_own_offers_are_left_out_by_default():
+    assert Settings(_env_file=None, database_url="x").traderie_username == "rakanishoes"
+
+
 def test_user_agent_is_this_app_and_not_a_browser():
     agent = Settings(_env_file=None, database_url="x").user_agent
     assert agent.startswith("d2-trader/")

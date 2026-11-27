@@ -220,6 +220,10 @@ dl.plain dd { margin: 0; color: var(--ink-2); }
 .deal-bad strong { color: var(--bad); }
 .deal-fair strong, .deal-unclear strong { color: var(--warn); }
 .asks td:not(:first-child), .asks th { white-space: nowrap; }
+/* An offer already opened: dimmed and marked, so the eye skips to the new ones. */
+tr.visited td { color: var(--ink-2); }
+tr.visited a { color: var(--ink-2); }
+.visited-mark { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
 /* Trade up: what you hold beside the offers it can pay for; stacked on a narrow screen. */
 .trade-up-layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); margin-bottom: 16px; }
 @media (min-width: 1100px) { .trade-up-layout { grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr); align-items: start; } }

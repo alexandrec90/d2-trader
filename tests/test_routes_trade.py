@@ -72,6 +72,25 @@ async def test_with_nothing_saved_every_trade_up_is_listed(client, sessions):
     assert "save what you hold" in page
 
 
+async def test_the_operators_own_offer_is_not_one_to_take(client, sessions):
+    """The settings fixture keeps the default username, `rakanishoes`. The same offer from
+    somebody else is listed, so it is the poster that hides it, not its price."""
+    await store_offers(sessions)
+    now = utcnow()
+    offers = [
+        ParsedListing(
+            "traderie", who, "ask", MarketKey(), [[("um", 9.0)]], now, attrs={"poster": who}
+        )
+        for who in ("rakanishoes", "Larzuk001")
+    ]
+    async with sessions() as session:
+        lo = await rune_item(session, "lo")
+        await store_listings(session, lo.id, offers, now)
+        await session.commit()
+    page = (await client.get("/trade-up")).text
+    assert sorted(paid(page)) == ["15 Pul", "2 Vex", "9 Um"]
+
+
 async def test_saved_holdings_keep_only_what_they_can_pay_for(client, sessions):
     await store_offers(sessions)
     await hold(sessions, {"pul": 15, "um": 10})
