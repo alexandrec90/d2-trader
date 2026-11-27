@@ -57,6 +57,16 @@ async def test_seeing_a_listing_again_takes_its_price_and_lot_size(session, item
     assert (row.alternatives, row.quantity) == (expected, 1)
 
 
+async def test_seeing_a_listing_again_takes_its_attrs(session, item, make_listing):
+    """So a row stored before its poster was read gains one at the next collection."""
+    await store_listings(session, item.id, [make_listing("a", 3)], NOW)
+    again = make_listing("a", 3, attrs={"poster": "rakanishoes"})
+    await store_listings(session, item.id, [again], NOW)
+    session.expire_all()
+    row = (await session.execute(select(Listing))).scalar_one()
+    assert row.attrs == {"poster": "rakanishoes"}
+
+
 async def test_the_same_id_as_ask_then_sold_is_two_facts(session, item, make_listing):
     await store_listings(
         session,

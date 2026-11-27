@@ -56,6 +56,8 @@ async def store_listings(
 
     Seeing one again also takes its price, since a seller may edit it. `alternatives` and
     `quantity` move together: either alone would pair one price with another's lot size.
+    It takes `attrs` too, so a row stored before a source read a field (its poster, say)
+    gains it at the next collection.
     """
     for listing in listings:
         market = await get_or_create_market(session, listing.market)
@@ -80,6 +82,7 @@ async def store_listings(
                 set_={
                     "alternatives": statement.excluded.alternatives,
                     "quantity": statement.excluded.quantity,
+                    "attrs": statement.excluded.attrs,
                     "last_seen_at": now,
                     "observed_at": listing.observed_at,
                 },

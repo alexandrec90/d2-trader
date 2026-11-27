@@ -18,6 +18,7 @@ from d2_trader.sources.traderie import (
     listing_params,
     listing_url,
     parse_listings,
+    poster,
 )
 
 MARKET = MarketKey("PC", "softcore", True, "rotw")
@@ -73,7 +74,17 @@ def test_parse_reads_a_listing():
     assert listing.ethereal is True
     assert listing.quantity == 1
     assert listing.observed_at.year == 2026
-    assert listing.attrs == {"rarity": "superior"}
+    assert listing.attrs == {"rarity": "superior", "poster": None}
+
+
+def test_a_listing_names_its_poster_at_the_top_level_or_in_a_user_block():
+    """Seen in a real response: `"username": "Larzuk001"`; where it sits was not."""
+    for raw in (raw_listing(username="Larzuk001"), raw_listing(user={"username": "Larzuk001"})):
+        [listing] = parse_listings({"listings": [raw]}, MARKET, "ask")
+        assert listing.attrs["poster"] == "Larzuk001"
+    assert poster({"user": None}) is None
+    assert poster({"user": "Larzuk001"}) is None
+    assert poster({"username": ""}) is None
 
 
 def test_a_listing_links_to_its_own_page_not_the_items():

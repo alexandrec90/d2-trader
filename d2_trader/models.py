@@ -159,6 +159,20 @@ class Holding(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
 
+class ListingVisit(Base):
+    """When the operator last opened a listing's page from the dashboard.
+
+    Keyed by the page's URL, not a `listings` row: one Traderie listing can be stored
+    under several kinds, and opening its page is opening all of them.
+    """
+
+    __tablename__ = "listing_visits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(400), unique=True)
+    visited_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class SeasonRow(Base):
     __tablename__ = "seasons"
 

@@ -39,6 +39,16 @@
 {% if ask.wanted %}{{ ask.listing.quantity }} {{ currency_name(ask.wanted) }} for {% for lot in ask.offered %}{% if not loop.first %} + {% endif %}{{ "%g" | format(lot[1]) }} {{ currency_name(lot[0]) }}{% endfor %} <span class="muted">(they want)</span>{% else %}{{ listing_price(ask.listing) }}{% endif %}
 {%- endmacro %}
 
+{# A link to a listing's own page, through the dashboard so the visit is remembered, and
+   a mark once it has been opened. `visited` is the page's set of opened URLs. #}
+{% macro offer_link(listing) -%}
+{% if listing.url %}<a href="/listings/{{ listing.id }}/open" referrerpolicy="no-referrer">{{ caller() }}</a>{% if listing.url in (visited or ()) %} <span class="visited-mark" title="You opened this listing">&#10003; seen</span>{% endif %}{% else %}{{ caller() }}{% endif %}
+{%- endmacro %}
+
+{% macro visited_class(listing) -%}
+{% if listing.url and listing.url in (visited or ()) %} class="visited"{% endif %}
+{%- endmacro %}
+
 {% macro offers_table(a, estimate, every) %}
 {% if a and a.cheapest %}
 <div class="scroll"><table class="asks">
@@ -46,8 +56,8 @@
   <thead><tr><th>You pay</th><th class="num">Ist each</th><th class="num">vs estimate</th><th>Listed</th></tr></thead>
   <tbody>
     {% for ask in a.cheapest %}
-    <tr>
-      <td>{% if ask.listing.url %}<a href="{{ ask.listing.url }}" rel="noreferrer">{{ offer_price(ask) }}</a>{% else %}{{ offer_price(ask) }}{% endif %}</td>
+    <tr{{ visited_class(ask.listing) }}>
+      <td>{% call offer_link(ask.listing) %}{{ offer_price(ask) }}{% endcall %}</td>
       <td class="num">{{ "%.3g" | format(ask.value) }}</td>
       <td class="num">{{ "%+.0f%%" | format((ask.value / estimate - 1) * 100) }}</td>
       <td class="muted">{{ humanize(ask.listing.observed_at, now) }}</td>

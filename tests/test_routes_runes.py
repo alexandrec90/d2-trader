@@ -8,7 +8,7 @@ import pytest
 from d2_trader.config import Settings
 from d2_trader.currency import SEED_RATES
 from d2_trader.markets import MarketKey
-from d2_trader.models import CurrencyRate, utcnow
+from d2_trader.models import CurrencyRate, Listing, utcnow
 from d2_trader.rune_model import RuneFit, Trade, fit_runes
 from d2_trader.services.catalog import get_or_create_market
 from d2_trader.services.pricing import store_listings
@@ -21,6 +21,7 @@ from d2_trader.web.routes_runes import (
     RunePanel,
     hours_label,
     market_query,
+    not_mine,
     panels,
     runes_page,
     valuation_rates,
@@ -30,6 +31,23 @@ from d2_trader.web.routes_runes import (
 def test_the_page_is_routed():
     bound = {(m, r.path): r.endpoint for r in routes_runes.router.routes for m in r.methods}
     assert bound == {("GET", "/runes"): runes_page}
+
+
+def test_the_operators_own_offers_are_left_out_whatever_the_case():
+    mine, upper, theirs, unread = (
+        Listing(attrs={"poster": "rakanishoes"}),
+        Listing(attrs={"poster": "RakaniShoes"}),
+        Listing(attrs={"poster": "Larzuk001"}),
+        Listing(attrs={}),
+    )
+    rows = [("lo", mine), ("lo", upper), ("lo", theirs), ("ist", unread)]
+    assert not_mine(rows, "rakanishoes") == [("lo", theirs), ("ist", unread)]
+
+
+def test_no_username_keeps_every_offer():
+    rows = [("lo", Listing(attrs={"poster": "rakanishoes"})), ("lo", Listing(attrs=None))]
+    assert not_mine(rows, "") == rows
+    assert not_mine(rows, "  ") == rows
 
 
 def test_runes_are_charted_most_valuable_first():

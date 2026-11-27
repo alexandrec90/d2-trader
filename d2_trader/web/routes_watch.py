@@ -15,6 +15,7 @@ from d2_trader.models import AlertRule, Watchlist, WatchItem, utcnow
 from d2_trader.services.calendar import current_state
 from d2_trader.services.catalog import get_item_by_name, market_key, search_items
 from d2_trader.services.pricing import MarketView, estimate_path, history, recent_listings
+from d2_trader.services.visits import visited_urls
 from d2_trader.services.rates import load_rates
 from d2_trader.services.sources_view import source_health
 from d2_trader.services.watch import (
@@ -136,6 +137,7 @@ async def watch_detail(watch_id: int, request: Request, session: Db):
     days = daily_history(quotes)
     path = estimate_path(quotes, seasons, wanted.market.ladder, now.date())
     rules = [(r, describe_rule(r), threshold_in_ist(r, rates)) for r in watch.rules]
+    listings = await recent_listings(session, wanted, now - timedelta(days=RECENT_DAYS))
     return await render(
         request,
         session,
@@ -150,7 +152,9 @@ async def watch_detail(watch_id: int, request: Request, session: Db):
             days, seasons, rates, now=now, title=f"{watch.item.name} price history", path=path
         ),
         rules=rules,
-        listings=await recent_listings(session, wanted, now - timedelta(days=RECENT_DAYS)),
+        listings=listings,
+        # The page shows the first 40; see watch.html.
+        visited=await visited_urls(session, (listing.url for listing in listings[:40])),
         d2jsp_url=d2jsp_forum_url(wanted.market),
         currencies=sorted(rates),
     )

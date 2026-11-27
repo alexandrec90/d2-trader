@@ -19,6 +19,7 @@ from d2_trader.services.holdings import (
     save_holdings,
 )
 from d2_trader.services.rune_values import FAIR_MARGIN, fit_market, measured_markets, trade_ups
+from d2_trader.services.visits import visited_urls
 from d2_trader.web.pages import get_session, render
 from d2_trader.web.routes_runes import (
     PageMarket,
@@ -69,6 +70,7 @@ async def trade_up_page(
     rates = await valuation_rates(session, fit, goods)
     held = await load_holdings(session, market)
     filtered = bool(held) and not show_all
+    ups = trade_ups(rows, rates, held if filtered else None)
     return await render(
         request,
         session,
@@ -79,9 +81,10 @@ async def trade_up_page(
         groups=holding_groups(held),
         held=held,
         show_all=show_all,
-        ups=trade_ups(rows, rates, held if filtered else None),
+        ups=ups,
         fair_margin=FAIR_MARGIN,
         every=hours_label(settings.rates_poll_hours),
+        visited=await visited_urls(session, (t.listing.url for t in ups)),
     )
 
 
